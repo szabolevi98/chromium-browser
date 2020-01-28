@@ -1,4 +1,5 @@
-# Browser_Alpha x64 .Net FrameWork 4.7.2
+# Browser_Alpha
+## x64 .Net FrameWork 4.7.2
 -ChromiumWebBrowser (CefSharp)   
 -Google keresés  
 -Több lap kezelése  
