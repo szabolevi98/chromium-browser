@@ -6,3 +6,5 @@
 -Könyvjelzők + kezelő  
 -Kezdőlap + módosítás  
 -Nyelv váltás (HU, EN)  
+  
+![alt text](https://github.com/szabolevi98/Browser_Alpha/tree/master/Browser_Alpha_Chromium/screenshot.png)

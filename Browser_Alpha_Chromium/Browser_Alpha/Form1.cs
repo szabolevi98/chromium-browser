@@ -14,6 +14,7 @@ using CefSharp.WinForms.Internals;
 using CefSharp.Example;
 using Microsoft.VisualBasic;
 using CefSharp.Example.Handlers;
+using System.Reflection;
 
 namespace Browser_Alpha
 {
@@ -65,7 +66,7 @@ namespace Browser_Alpha
                 kereso_szoveg = "Google keresés...";
                 google_http = "https://www.google.hu/search?q=";
                 nevjegy = "A program névjegye";
-                informacio_szoveg = "A programot készítette: Szabó Levente\n\nAz ikonok a flaticon.com/free-icon oldalról származnak.\n\n.Net verzió: 4.7.2\nAlkalmazás verzió: 1.0.0.1\nBöngésző motor: Chromium (Cefsharp)\n\n© 2020-2021";
+                informacio_szoveg = "A programot készítette: Szabó Levente\n\nAz ikonok a flaticon.com/free-icon oldalról származnak.\n\n.Net verzió: 4.7.2\nAlkalmazás verzió: 1.0.0.1\nBöngésző motor: Chromium (Cefsharp)\n\nCopyright © 2020-2021";
                 change_lang = "Nyelv váltás";
                 change_lang_text = "Szeretnéd átváltani a nyelvet Angolra?\nA program újra fog indulni!";
                 chrm_inf = "Chromium verzió";
@@ -97,7 +98,7 @@ namespace Browser_Alpha
                 kereso_szoveg = "Google Search...";
                 google_http = "https://www.google.com/search?q=";
                 nevjegy = "About the program";
-                informacio_szoveg = "Program created by: Szabó Levente\n\nIcons from flaticon.com/free-icon.\n\n.Net version: 4.7.2\nProgram version: 1.0.0.1\nBrowser engine: Chromium (Cefsharp)\n\n© 2020-2021";
+                informacio_szoveg = "Program created by: Szabó Levente\n\nIcons from flaticon.com/free-icon.\n\n.Net version: 4.7.2\nProgram version: 1.0.0.1\nBrowser engine: Chromium (Cefsharp)\n\nCopyright © 2020-2021";
                 change_lang = "Change language";
                 change_lang_text = "Do you want to change the language to Hungarian?\nThe program will restart!";
                 chrm_inf = "Chromium version";
@@ -142,7 +143,7 @@ namespace Browser_Alpha
                 huToolStripMenuItem.Enabled = true;
             }
 
-            Text = cim;
+            Text = cim + " v" + Assembly.GetExecutingAssembly().GetName().Version.ToString();
             googleKeresSav.Text = kereso_szoveg;
 
             this.tabControl.Padding = new Point(18, 4);
