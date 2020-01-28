@@ -7,4 +7,4 @@
 -Kezdőlap + módosítás  
 -Nyelv váltás (HU, EN)  
   
-![Screenshot](https://raw.githubusercontent.com/szabolevi98/Browser_Alpha/master/Browser_Alpha_Chromium/screenshot.png?token=ALBMWVVCMW4PQ2VKLB66D3C6GB2PY)
+![Screenshot](Browser_Alpha_Chromium/screenshot.png?raw=true "Title")
