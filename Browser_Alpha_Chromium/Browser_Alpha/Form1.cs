@@ -276,7 +276,7 @@ namespace Browser_Alpha
             {
                 tmp = e.Title;
             }
-            this.InvokeOnUiThreadIfRequired(() => tabControl.SelectedTab.Text = tmp); 
+            this.InvokeOnUiThreadIfRequired(() => tabControl.SelectedTab.Text = tmp);
         }
         private void Chrm_AddressChanged(object sender, AddressChangedEventArgs e) //Url Címváltozás esetén az url sáv frissüljön 
         {

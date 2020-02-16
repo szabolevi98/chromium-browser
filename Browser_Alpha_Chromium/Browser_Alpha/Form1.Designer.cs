@@ -231,7 +231,7 @@
             this.tempToolStripMenuItem});
             this.bookmarksToolStripMenuItem.Enabled = false;
             this.bookmarksToolStripMenuItem.Name = "bookmarksToolStripMenuItem";
-            this.bookmarksToolStripMenuItem.Size = new System.Drawing.Size(155, 22);
+            this.bookmarksToolStripMenuItem.Size = new System.Drawing.Size(133, 22);
             this.bookmarksToolStripMenuItem.Text = "bookmarks";
             // 
             // tempToolStripMenuItem
@@ -244,40 +244,40 @@
             // bookmarkseditToolStripMenuItem
             // 
             this.bookmarkseditToolStripMenuItem.Name = "bookmarkseditToolStripMenuItem";
-            this.bookmarkseditToolStripMenuItem.Size = new System.Drawing.Size(155, 22);
+            this.bookmarkseditToolStripMenuItem.Size = new System.Drawing.Size(133, 22);
             this.bookmarkseditToolStripMenuItem.Text = "bookmarks_edit";
             this.bookmarkseditToolStripMenuItem.Click += new System.EventHandler(this.bookmarkseditToolStripMenuItem_Click);
             // 
             // homepageToolStripMenuItem
             // 
             this.homepageToolStripMenuItem.Name = "homepageToolStripMenuItem";
-            this.homepageToolStripMenuItem.Size = new System.Drawing.Size(155, 22);
+            this.homepageToolStripMenuItem.Size = new System.Drawing.Size(133, 22);
             this.homepageToolStripMenuItem.Text = "homepage";
             this.homepageToolStripMenuItem.Click += new System.EventHandler(this.homepageToolStripMenuItem_Click);
             // 
             // toolStripMenuItem1
             // 
             this.toolStripMenuItem1.Name = "toolStripMenuItem1";
-            this.toolStripMenuItem1.Size = new System.Drawing.Size(152, 6);
+            this.toolStripMenuItem1.Size = new System.Drawing.Size(130, 6);
             // 
             // chrminfToolStripMenuItem
             // 
             this.chrminfToolStripMenuItem.Name = "chrminfToolStripMenuItem";
-            this.chrminfToolStripMenuItem.Size = new System.Drawing.Size(155, 22);
+            this.chrminfToolStripMenuItem.Size = new System.Drawing.Size(133, 22);
             this.chrminfToolStripMenuItem.Text = "chrm_inf";
             this.chrminfToolStripMenuItem.Click += new System.EventHandler(this.chrminfToolStripMenuItem_Click);
             // 
             // proginfToolStripMenuItem
             // 
             this.proginfToolStripMenuItem.Name = "proginfToolStripMenuItem";
-            this.proginfToolStripMenuItem.Size = new System.Drawing.Size(155, 22);
+            this.proginfToolStripMenuItem.Size = new System.Drawing.Size(133, 22);
             this.proginfToolStripMenuItem.Text = "prog_inf";
             this.proginfToolStripMenuItem.Click += new System.EventHandler(this.proginfToolStripMenuItem_Click);
             // 
             // toolStripMenuItem2
             // 
             this.toolStripMenuItem2.Name = "toolStripMenuItem2";
-            this.toolStripMenuItem2.Size = new System.Drawing.Size(152, 6);
+            this.toolStripMenuItem2.Size = new System.Drawing.Size(130, 6);
             // 
             // changelangToolStripMenuItem
             // 
@@ -285,7 +285,7 @@
             this.huToolStripMenuItem,
             this.enToolStripMenuItem});
             this.changelangToolStripMenuItem.Name = "changelangToolStripMenuItem";
-            this.changelangToolStripMenuItem.Size = new System.Drawing.Size(155, 22);
+            this.changelangToolStripMenuItem.Size = new System.Drawing.Size(133, 22);
             this.changelangToolStripMenuItem.Text = "change_lang";
             // 
             // huToolStripMenuItem
