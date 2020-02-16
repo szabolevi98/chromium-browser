@@ -168,6 +168,14 @@ namespace Browser_Alpha
 
             //Chromium inicializálása hogy tudjuk később használni
             CefSettings settings = new CefSettings();
+            if (nyelv == "en")
+            {
+                settings.Locale = "en"; //Ez maga a Chromium nyelve pl jobb klikk esetén egy weboldalon
+            }
+            else
+            {
+                settings.Locale = "hu";
+            }
             Cef.Initialize(settings);
 
             ChromiumWebBrowser chrm;
@@ -312,7 +320,9 @@ namespace Browser_Alpha
                 Rectangle xGomb = new Rectangle(r.Right - 15, r.Top + 4, 9, 7); //téglalap pozíció megadása
                 if (xGomb.Contains(e.Location)) //Ha az egerünk benne van abban a téglalapban (amiben az X is van) akkor
                 {
-                    this.tabControl.TabPages.RemoveAt(i); //Bezárjuk a kiválasztott lapot
+                    ChromiumWebBrowser chrm = getCurrentChrm();
+                    chrm.Dispose(); //Bezárjuk a Chromiumot
+                    this.tabControl.TabPages.RemoveAt(i); //Majd bezárjuk a lapot
                 }
             }
         }
@@ -534,9 +544,9 @@ namespace Browser_Alpha
             var ib = Interaction.InputBox(uj_kezdolap_cime, kezdolap_valtas, http_text);
             if (ib != "")
             { 
-                using (StreamWriter sw = new StreamWriter("kezdolap.ini", false))
+                using (StreamWriter writer = new StreamWriter("kezdolap.ini", false))
                 {
-                    sw.WriteLine(ib);
+                    writer.WriteLine(ib);
                 }
             }
         }
