@@ -15,17 +15,21 @@ namespace Browser_Alpha
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
-            string nyelv = "hu";
+            string nyelv = ""; 
 
-            if (File.Exists("nyelv.ini"))
+            if (File.Exists("nyelv.ini")) //Ha a nyelv.ini létezik
             {
                 using (StreamReader reader = new StreamReader("nyelv.ini"))
                 {
-                    nyelv = reader.ReadLine();
+                    nyelv = reader.ReadLine(); //Beolvassuk abból
                 }
             }
+            else //Ha nem
+            {
+                nyelv = "hu"; //Legyen magyar
+            }
 
-            Application.Run(new Form1(nyelv));
+            Application.Run(new Form1(nyelv)); //Form1 megnyitása az adott nyelven
         }
     }
 }

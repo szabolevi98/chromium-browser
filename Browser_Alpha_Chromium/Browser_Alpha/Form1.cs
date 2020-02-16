@@ -7,14 +7,16 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.IO;
+using System.Reflection;
+using System.IO; //Fájlkezelés
+using Microsoft.VisualBasic; //InputBox használatához kell, mert az a VisualBasic része
+//Cefsharp namescape-ek betöltése a Chromium használatához
 using CefSharp;
 using CefSharp.WinForms;
 using CefSharp.WinForms.Internals;
 using CefSharp.Example;
-using Microsoft.VisualBasic;
 using CefSharp.Example.Handlers;
-using System.Reflection;
+
 
 namespace Browser_Alpha
 {
@@ -51,11 +53,11 @@ namespace Browser_Alpha
         public string beallitasok;
         public string nyelv;
 
-        ToolTip tp = new ToolTip();
+        ToolTip tp = new ToolTip(); //Tooltip hogy később amikor a gombok fölé visszük az egeret kitudjuk iratni a gomb nevét
 
-        public Form1(string Nyelv)
+        public Form1(string Nyelv) //Konstruktor ami megkapja a nyelvet majd annak függvényében tölti fel a fentebb telálható stringeket
         {
-            if (Nyelv == "hu")
+            if (Nyelv == "hu") //Magyar
             {
                 cim = "Egyszerű Webböngésző";
                 kezdo_oldal = "https://www.google.hu/";
@@ -87,7 +89,7 @@ namespace Browser_Alpha
                 beallitasok = "Beállítások";
                 
             }
-            else if (Nyelv == "en")
+            else if (Nyelv == "en") //Angol
             {
                 cim = "Simple Webbrowser";
                 kezdo_oldal = "https://www.google.com/";
@@ -118,20 +120,20 @@ namespace Browser_Alpha
                 angol = "English";
                 beallitasok = "Settings";
             }
-            else
+            else //Ismeretlen nyelv esetén egy hibaüzenet kiírása majd bezárás
             {
                 MessageBox.Show("not_valid_lang", "nyelv.ini", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 Environment.Exit(0);
                 
             }
-            this.nyelv = Nyelv;
+            this.nyelv = Nyelv; //Elmentjük a nyelvet hogy később át tudjuk adni a könyvjelző ablaknak
             InitializeComponent();
-
         }
 
 
         private void Form1_Load(object sender, EventArgs e)
         {
+            //Nyelvválasztónál pipa a jelenlegi nyelvre, a másikat pedig kattinthatóvá tesszük
             if (nyelv == "hu")
             {
                 huToolStripMenuItem.Checked = true;
@@ -143,16 +145,18 @@ namespace Browser_Alpha
                 huToolStripMenuItem.Enabled = true;
             }
 
-            Text = cim + " v" + Assembly.GetExecutingAssembly().GetName().Version.ToString();
-            googleKeresSav.Text = kereso_szoveg;
+            Text = cim + " v" + Assembly.GetExecutingAssembly().GetName().Version.ToString(); //Programverzió megjelenítése a form címében
+            googleKeresSav.Text = kereso_szoveg; //Google keresés sáv szövegének feltöltése
 
-            this.tabControl.Padding = new Point(18, 4);
+            this.tabControl.Padding = new Point(18, 4); //Padding a tab controlra hogy később elférjen majd az X a lap bezárásához
 
+            //Legördülő menüpontok iránya esztétika miatt
             bookmarksToolStripMenuItem.DropDownDirection = ToolStripDropDownDirection.Left;
             changelangToolStripMenuItem.DropDownDirection = ToolStripDropDownDirection.BelowLeft;
 
-            ((ToolStripDropDownMenu)bookmarksToolStripMenuItem.DropDown).ShowImageMargin = false;
+            ((ToolStripDropDownMenu)bookmarksToolStripMenuItem.DropDown).ShowImageMargin = false; //Képmargó tiltása a könyvjelzők gyors megjelenítésénél mert nem használjuk
 
+            //ToolStrip menüpontok szövegének feltöltése
             enToolStripMenuItem.Text = angol;
             huToolStripMenuItem.Text = magyar;
             chrminfToolStripMenuItem.Text = chrm_inf;
@@ -162,76 +166,75 @@ namespace Browser_Alpha
             bookmarkseditToolStripMenuItem.Text = konyvjelzo_kezelo;
             homepageToolStripMenuItem.Text = kezdolap_valtas;
 
+            //Chromium inicializálása hogy tudjuk később használni
             CefSettings settings = new CefSettings();
             Cef.Initialize(settings);
 
             ChromiumWebBrowser chrm;
-            if (File.Exists("kezdolap.ini"))
+            if (File.Exists("kezdolap.ini")) //Ha a kezdőlapot átírtuk tehát a fájl létezik azt töltse be
             {
                 using (StreamReader reader = new StreamReader("kezdolap.ini"))
                 {
                     chrm = new ChromiumWebBrowser(reader.ReadLine());
                 }
             }
-            else
+            else //ellenkező esetben az alapértelmezettet
             {
                 chrm = new ChromiumWebBrowser(kezdo_oldal);
             }
-            chrm.Parent = tabControl.SelectedTab;
-            chrm.Dock = DockStyle.Fill;
-            chrm.AddressChanged += Chrm_AddressChanged;
-            chrm.TitleChanged += Chrm_TitleChanged;
-            chrm.DownloadHandler = new DownloadHandler();
+            chrm.Parent = tabControl.SelectedTab; //Megadjuk hogy a tabcontrolra töltse a Chromiumot
+            chrm.Dock = DockStyle.Fill; //Töltse ki, esztétika
+            chrm.AddressChanged += Chrm_AddressChanged; //Url cím változás az url címsávban
+            chrm.TitleChanged += Chrm_TitleChanged; //Weboldal title cím változása majd a tabcontrol szövegében jelenjen meg
+            chrm.DownloadHandler = new DownloadHandler(); //Letöltések a böngészőn keresztül engedélyezése
         }
 
-        private ChromiumWebBrowser getCurrentChrm()
+        private ChromiumWebBrowser getCurrentChrm() //Későbbiekben sokat lesz használva, és így csak egyszer kell hibát kezelni
         {
             try
             {
-                return (ChromiumWebBrowser)tabControl.SelectedTab.Controls[0];
+                return (ChromiumWebBrowser)tabControl.SelectedTab.Controls[0]; //Kiválasztott lapra adja vissza a Chromiumot
             }
-            catch (Exception)
+            catch (Exception) //Ha nincs lap vagy egyéb hiba jelentkezik akkor a catch messagebox figyelmeztetés után új lapot hoz létre Chromiummal
             {
                 MessageBox.Show(nincs_lap, hiba, MessageBoxButtons.OK, MessageBoxIcon.Error);
-                ujLapGomb.PerformClick();
+                ujLapGomb.PerformClick(); 
                 return (ChromiumWebBrowser)tabControl.SelectedTab.Controls[0];
             }
 
         }
 
-        private void textBox2_Click_1(object sender, EventArgs e)
+        private void textBox2_Click(object sender, EventArgs e) //Ha belekattintunk a "Google keresés..." sávba akkor az alapértelmett szöveget törölje, így nem kell a felhasználónak visszatörölni
         {
             googleKeresSav.Clear();
         }
 
-        private void mehet()
+        private void mehet() //Url navigálásnál (gomb + enter lenyomás) használt metódus
         {
-            if (urlSav.Text == "")
+            if (urlSav.Text == "") //Ha a sáv üres, hibaüzenet
             {
                 MessageBox.Show(nincs_url, hiba, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             else
             {
-                ChromiumWebBrowser chrm = getCurrentChrm();
-                chrm.DownloadHandler = new DownloadHandler();
+                ChromiumWebBrowser chrm = getCurrentChrm(); //Chromium meghívása az adott lapon (Sokat lesz használva, többször nem kommentelem)
+                chrm.DownloadHandler = new DownloadHandler(); //Letöltések engedélyezése
                 if (chrm != null)
                 {
                     if (urlSav.Text.Contains(".") || urlSav.Text == "localhost")
                     {
                         chrm.Load(urlSav.Text);
                     }
-                    else
+                    else //Ha nincs pont, se nem localhost akkor google keresést hajtson végre mert valószínűleg a felhasználó azt akarta
                     {
                         chrm.Load(google_http + urlSav.Text);
-
                     }
 
                 }
             }
         }
-        private void mehet2()
+        private void mehet2() //Google keresésnél (gomb + enter lenyomás) használt metódus
         {
-
             if (googleKeresSav.Text == "" || googleKeresSav.Text == kereso_szoveg)
             {
                 MessageBox.Show(nincs_szoveg, hiba, MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -252,25 +255,23 @@ namespace Browser_Alpha
 
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
-            Cef.Shutdown();
+            Cef.Shutdown(); //Form bezárásánál a Chromiumot ajánlott leállítani így
         }
 
-        private void Chrm_TitleChanged(object sender, TitleChangedEventArgs e)
+        //CefSharp.WinForms.Internals tartalmazza az InvokeOnUiThreadIfRequired-t
+        private void Chrm_TitleChanged(object sender, TitleChangedEventArgs e) //Címváltozás esetén a tabcontrol frissüljön az új címmel
         {
-            //this.Invoke(new MethodInvoker(() => { tabControl1.SelectedTab.Text = e.Title; }));
-            string asd = "";
-            if (e.Title.Length > 20)
-                asd = e.Title.Substring(0, 17) + "...";
+            string tmp = "";
+            if (e.Title.Length > 20) //Ha túl hosszú akkor a 17. karakter után legyen 3 pont, így max 20 karakter lehet ami még nem zavaró
+                tmp = e.Title.Substring(0, 17) + "...";
             else
             {
-                asd = e.Title;
+                tmp = e.Title;
             }
-            this.InvokeOnUiThreadIfRequired(() => tabControl.SelectedTab.Text = asd);
+            this.InvokeOnUiThreadIfRequired(() => tabControl.SelectedTab.Text = tmp); 
         }
-
-        private void Chrm_AddressChanged(object sender, AddressChangedEventArgs e)
+        private void Chrm_AddressChanged(object sender, AddressChangedEventArgs e) //Url Címváltozás esetén az url sáv frissüljön 
         {
-            //this.Invoke(new MethodInvoker(() => { textBox1.Text = e.Address; }));
             this.InvokeOnUiThreadIfRequired(() =>
             {
                 if (e.Address.Contains("//version/"))
@@ -284,43 +285,43 @@ namespace Browser_Alpha
             });
         }
 
-        private void chrminfToolStripMenuItem_Click_1(object sender, EventArgs e)
+        private void chrminfToolStripMenuItem_Click(object sender, EventArgs e) //Chrome verzió megjelenítése menü fül
         {
             ChromiumWebBrowser chrm = getCurrentChrm();
             chrm.DownloadHandler = new DownloadHandler();
             chrm.Load("chrome://version/");
         }
 
-        private void proginfToolStripMenuItem_Click(object sender, EventArgs e)
+        private void proginfToolStripMenuItem_Click(object sender, EventArgs e) //Program információ megjelenítése menü fül
         {
             MessageBox.Show(informacio_szoveg, nevjegy, MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
-        private void tabControl_DrawItem(object sender, DrawItemEventArgs e)
+        private void tabControl_DrawItem(object sender, DrawItemEventArgs e) //X bezáró gomb kirajzolása
         {
             e.Graphics.DrawString(this.tabControl.TabPages[e.Index].Text, e.Font, Brushes.Black, e.Bounds.Left + 12, e.Bounds.Top + 4);
             e.DrawFocusRectangle();
-            e.Graphics.DrawString("X ", e.Font, Brushes.Black, e.Bounds.Right - 17, e.Bounds.Top + 4);
+            e.Graphics.DrawString("X ", e.Font, Brushes.Black, e.Bounds.Right - 17, e.Bounds.Top + 4); //X kirajzolása 
         }
 
-        private void tabControl_MouseDown(object sender, MouseEventArgs e)
+        private void tabControl_MouseDown(object sender, MouseEventArgs e) //X gombra kattintva bezárja az adott lapot
         {
-            for (int i = 0; i < this.tabControl.TabPages.Count; i++)
+            for (int i = 0; i < this.tabControl.TabPages.Count; i++) //Az összes lapon végigmegyünk egy for ciklussal
             {
-                Rectangle r = tabControl.GetTabRect(i);
-                Rectangle closeButton = new Rectangle(r.Right - 15, r.Top + 4, 9, 7);
-                if (closeButton.Contains(e.Location))
+                Rectangle r = tabControl.GetTabRect(i); //téglalap lekérése
+                Rectangle xGomb = new Rectangle(r.Right - 15, r.Top + 4, 9, 7); //téglalap pozíció megadása
+                if (xGomb.Contains(e.Location)) //Ha az egerünk benne van abban a téglalapban (amiben az X is van) akkor
                 {
-                    this.tabControl.TabPages.RemoveAt(i);
+                    this.tabControl.TabPages.RemoveAt(i); //Bezárjuk a kiválasztott lapot
                 }
             }
         }
 
-        private void tabControl_Click(object sender, EventArgs e)
+        private void tabControl_Click(object sender, EventArgs e) //TabControl (lap kezelő) másik lapra való kattintás
         {
             ChromiumWebBrowser chrm = getCurrentChrm();
             chrm.DownloadHandler = new DownloadHandler();
-            urlSav.Text = chrm.Address;
+            urlSav.Text = chrm.Address; //A Chrm_AddressChanged tab váltás esetén nem képes lekezelni a változást, így itt manuálisan állítjuk be az url sáv szövegét
         }
 
         private void visszaGomb_Click(object sender, EventArgs e)
@@ -329,9 +330,9 @@ namespace Browser_Alpha
             chrm.DownloadHandler = new DownloadHandler();
             if (chrm != null)
             {
-                if (chrm.CanGoBack)
+                if (chrm.CanGoBack) //Csak akkor menjen vissza ha vissza tud, így nem lesz leállás
                 {
-                    chrm.Back();
+                    chrm.Back(); //Visszalépés
                 }
             }
         }
@@ -342,30 +343,30 @@ namespace Browser_Alpha
             chrm.DownloadHandler = new DownloadHandler();
             if (chrm != null)
             {
-                if (chrm.CanGoForward)
+                if (chrm.CanGoForward) //Csak akkor menjen előre ha előre tud, így nem lesz leállás
                 {
-                    chrm.Forward();
+                    chrm.Forward(); //Előre lépés
                 }
             }
         }
 
-        private void ujraGomb_Click(object sender, EventArgs e)
+        private void ujraGomb_Click(object sender, EventArgs e) //Weblap újratöltése
         {
             ChromiumWebBrowser chrm = getCurrentChrm();
             chrm.DownloadHandler = new DownloadHandler();
             if (chrm != null)
             {
-                chrm.Load(urlSav.Text);
-                chrm.Refresh();
+                chrm.Refresh(); //Újratöltés
+                chrm.Load(urlSav.Text); //Néha nem elég a refresh bizonyos weboldalaknál, így egy load-ot is tettem ide
             }
         }
 
-        private void urlKeresGomb_Click(object sender, EventArgs e)
+        private void urlKeresGomb_Click(object sender, EventArgs e) //Url kerés gomb
         {
             mehet();
         }
 
-        private void googleKeresGomb_Click(object sender, EventArgs e)
+        private void googleKeresGomb_Click(object sender, EventArgs e) //Google keresés gomb
         {
             mehet2();
         }
@@ -374,44 +375,44 @@ namespace Browser_Alpha
         {
             ChromiumWebBrowser chrm = getCurrentChrm();
             chrm.DownloadHandler = new DownloadHandler();
-            if (File.Exists("kezdolap.ini"))
+            if (File.Exists("kezdolap.ini")) //Ha létezik a fájl tehát módosítottuk már a kezdőlapot
             {
                 using (StreamReader reader = new StreamReader("kezdolap.ini"))
                 {
-                    chrm.Load(reader.ReadLine());
+                    chrm.Load(reader.ReadLine()); //Akkor azt töltse be
                 }
             }
             else
             {
-                chrm.Load(kezdo_oldal);
+                chrm.Load(kezdo_oldal); //ellenkező esetben az alapot
             }
         }
 
-        private void infGomb_Click(object sender, EventArgs e)
+        private void infGomb_Click(object sender, EventArgs e) //Beállítások gomb
         {
-            bookmarksToolStripMenuItem.Enabled = false;
-            if (File.Exists("konyvjelzok.ini"))
-            {
-                bookmarksToolStripMenuItem.DropDown.Items.Clear();
+            contextMenuStrip1.Show(infGomb, new Point(infGomb.Width - contextMenuStrip1.Width, infGomb.Height)); //Egész legördülő menü megjelenítése
 
-                using (StreamReader reader = new StreamReader("konyvjelzok.ini"))
+            //A következőkben a könyvjelzők gyors megjelenítésével kell foglalkozni, hogy ne kelljen a könyvjelző kezelőt megnyitni állandóan
+            bookmarksToolStripMenuItem.Enabled = false; //Az elején tegyük a gyors megjelenítőt kikapcsoltra mert még nem biztos hogy van könyvjelző
+            if (File.Exists("konyvjelzok.ini")) //Ha a fájl létezik
+            {
+                bookmarksToolStripMenuItem.DropDown.Items.Clear(); //Egy törlés az előzőekre mert betöltünk mindent újra, így nem lesz duplikáció, illetve lehet változott valami azóta
+                using (StreamReader reader = new StreamReader("konyvjelzok.ini")) //Mivel fentebb megbizonyosodtunk hogy létezik így beolvassuk a fájlt
                 {
-                    while (true)
+                    while (!reader.EndOfStream)
                     {
                         string sor = reader.ReadLine();
-                        if (sor == null)
+                        if (sor == null) //Ha esetleg lenne a végén egy üres sor akkor azt hagyja figyelmen kívül
                             break;
-                        bookmarksToolStripMenuItem.DropDown.Items.Add(sor, null, DropDown_Click);
-                        bookmarksToolStripMenuItem.Enabled = true;
+                        bookmarksToolStripMenuItem.DropDown.Items.Add(sor, null, Bm_Kat); //Hozzáadjuk a sorokat a könyvjelzők legördülő menüjébe (DropDown_Click majd a kattintás miatt kell)
+
                     }
                 }
-
+                bookmarksToolStripMenuItem.Enabled = true; //És engedélyezzük a könyvjelzők gyors megjelenítését, kattintható lesz
             }
-            
-            contextMenuStrip1.Show(infGomb, new Point(infGomb.Width-contextMenuStrip1.Width, infGomb.Height));
         }
 
-        private void DropDown_Click(object sender, EventArgs e)
+        private void Bm_Kat(object sender, EventArgs e) //Könyvjelző kattintásra nyissa meg a weboldalt, a senderből tudjuk melyikre kattint
         {
             ToolStripItem link = sender as ToolStripItem;
             if (link != null)
@@ -422,12 +423,14 @@ namespace Browser_Alpha
             }
         }
 
-        private void ujLapGomb_Click(object sender, EventArgs e)
+        private void ujLapGomb_Click(object sender, EventArgs e) //Új lap létrehozása
         {
-            TabPage tab = new TabPage();
-            tabControl.Controls.Add(tab);
-            tabControl.SelectTab(tabControl.TabCount - 1);
-            ChromiumWebBrowser chrm;
+            TabPage tab = new TabPage(); //tab objectum létrehozása
+            tabControl.Controls.Add(tab); //lap hozzáadása
+            tabControl.SelectTab(tabControl.TabCount - 1); //kiválasztása
+            
+            //Szoksásos Chromium betöltése azt új lapra mint fentebb a form loadnál (nem kommentelem újra, ugyanaz)
+            ChromiumWebBrowser chrm; 
             if (File.Exists("kezdolap.ini"))
             {
                 using (StreamReader reader = new StreamReader("kezdolap.ini"))
@@ -446,7 +449,7 @@ namespace Browser_Alpha
             chrm.TitleChanged += Chrm_TitleChanged;
         }
 
-        private void urlSav_KeyDown(object sender, KeyEventArgs e)
+        private void urlSav_KeyDown(object sender, KeyEventArgs e) //Mivel sokan nem szeretnek a keresés gombra kattintani, ezért ha leütjük az entert akkor is "mehet()"
         {
             if (e.KeyCode == Keys.Enter)
             {
@@ -454,7 +457,7 @@ namespace Browser_Alpha
             }
         }
 
-        private void googleKeresSav_KeyDown(object sender, KeyEventArgs e)
+        private void googleKeresSav_KeyDown(object sender, KeyEventArgs e) //Mivel sokan nem szeretnek a keresés gombra kattintani, ezért ha leütjük az entert akkor is "mehet2()"
         {
             if (e.KeyCode == Keys.Enter)
             {
@@ -462,6 +465,8 @@ namespace Browser_Alpha
             }
         }
 
+
+        //Fent deklarált tooltip segítségével kiírjuk a gombok nevét ha fölé visszük az egeret (mert ugye ikonok vannak csak a gombon)
         private void visszaGomb_MouseHover(object sender, EventArgs e)
         {
             tp.SetToolTip(this.visszaGomb, vissza);
@@ -502,19 +507,20 @@ namespace Browser_Alpha
             tp.SetToolTip(this.ujLapGomb, uj_lap);
         }
 
-        public void bmLoad(string link)
+        public void bmLoad(string link) //Könyvjelző betöltése a könyvjelző kezelő formról
         {
             ChromiumWebBrowser chrm = getCurrentChrm();
             chrm.DownloadHandler = new DownloadHandler();
             chrm.Load(link);
         }
-        public string bmUrlText()
+        public string bmUrlText() //Könyvjelző kezelő form letudja ezzel kérdezni a jelenlegi url-t
         {
             return urlSav.Text;
         }
 
-        private void homepageToolStripMenuItem_Click(object sender, EventArgs e)
+        private void homepageToolStripMenuItem_Click(object sender, EventArgs e) //Kezdőlap váltás menü gomb
         {
+            //Ha van kezdolap.ini akkor abból olvassa be a jelenlegi, ellenkező esetben marad az alap
             string http_text = kezdo_oldal;
             if (File.Exists("kezdolap.ini"))
             {
@@ -524,6 +530,7 @@ namespace Browser_Alpha
                 }
             }
 
+            //inputbox segítségével a felhasználó megadhatja az új kezdőlapot
             var ib = Interaction.InputBox(uj_kezdolap_cime, kezdolap_valtas, http_text);
             if (ib != "")
             { 
@@ -534,19 +541,20 @@ namespace Browser_Alpha
             }
         }
 
-        private void bookmarkseditToolStripMenuItem_Click(object sender, EventArgs e)
+        private void bookmarkseditToolStripMenuItem_Click(object sender, EventArgs e) //Könyvjelző kezelő form megnyitása
         {
-            Bookmarks bm = new Bookmarks(nyelv);
-            bm.Show();
+            Bookmarks bm = new Bookmarks(nyelv);//átadjuk neki a nyelvet, így ott is a jelenlegi nyelven lesznek a szövegek
+            bm.Show(); //Megjelenítjük a formot
         }
 
-        private void hu_enToolStripMenuItem_Click(object sender, EventArgs e)
+        private void hu_enToolStripMenuItem_Click(object sender, EventArgs e) //Nyelv váltás menü
         {
-            DialogResult dialogResult = MessageBox.Show(change_lang_text, change_lang, MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-            if (dialogResult == DialogResult.Yes)
+            DialogResult dialogResult = MessageBox.Show(change_lang_text, change_lang, MessageBoxButtons.YesNo, MessageBoxIcon.Question); //Messagebox-al megkérdezzük hogy akarja-e
+            if (dialogResult == DialogResult.Yes) //Ha a válasz igen
             {
                 using (StreamWriter sw = new StreamWriter("nyelv.ini", false))
                 {
+                    //Beleírjuk a másik nyelvet a nyelv.ini-be
                     if (nyelv == "hu")
                     {
                         sw.Write("en");
@@ -556,8 +564,8 @@ namespace Browser_Alpha
                         sw.Write("hu");
                     }
                 }
-                System.Diagnostics.Process.Start(Application.ExecutablePath);
-                Environment.Exit(0);
+                System.Diagnostics.Process.Start(Application.ExecutablePath); //Elindítjuk újra a programot ami már az új nyelven nyílik meg
+                Environment.Exit(0); //A jelenlegit bezárjuk
             }
         }
     }

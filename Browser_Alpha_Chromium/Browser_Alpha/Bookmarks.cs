@@ -3,17 +3,18 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
 using System.Drawing;
-using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using Microsoft.VisualBasic;
+using System.IO; //Fájlkezelés
+using Microsoft.VisualBasic; //InputBox használatához kell, mert az a VisualBasic része
 
 namespace Browser_Alpha
 {
     public partial class Bookmarks : Form
     {
+        private bool valtozott = false; //Igaz/Hamis változó hogy a végén csak akkor írjunk a fájlba ha változott valami
 
         public string nincs_kivalasztva;
         public string hiba;
@@ -27,7 +28,7 @@ namespace Browser_Alpha
 
         public string nyelv;
 
-        public Bookmarks(string Nyelv)
+        public Bookmarks(string Nyelv) //Konstruktor ami megkapja a nyelvet
         {
             this.nyelv = Nyelv;
             if (nyelv == "hu")
@@ -52,7 +53,7 @@ namespace Browser_Alpha
                 eltavolit = "Remove";
                 eltavolit_mindent = "Remove all";
             }
-            else
+            else //Ismeretlen nyelv nyelv
             {
                 MessageBox.Show("not_valid_lang", "nyelv.ini", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 Environment.Exit(0);
@@ -67,11 +68,11 @@ namespace Browser_Alpha
             eltavolitGomb.Text = eltavolit;
             eltavolitMindetGomb.Text = eltavolit_mindent;
 
-            if (File.Exists("konyvjelzok.ini"))
+            if (File.Exists("konyvjelzok.ini")) //Könyvjelzők feltöltése fájlból a listbox-ba ha létezik
             {
                 using (StreamReader reader = new StreamReader("konyvjelzok.ini"))
                 {
-                    while (true)
+                    while (!reader.EndOfStream)
                     {
                         string sor = reader.ReadLine();
                         if (sor == null)
@@ -85,6 +86,7 @@ namespace Browser_Alpha
         private void eltavolitMindetGomb_Click(object sender, EventArgs e)
         {
             listBox1.Items.Clear();
+            valtozott = true;
         }
 
         private void eltavolitGomb_Click(object sender, EventArgs e)
@@ -92,6 +94,7 @@ namespace Browser_Alpha
             try
             {
                 listBox1.Items.RemoveAt(listBox1.SelectedIndex);
+                valtozott = true;
             }
             catch
             {
@@ -105,16 +108,17 @@ namespace Browser_Alpha
             string url = "http://www.";
             if (Application.OpenForms["Form1"] != null)
             {
-                url = (Application.OpenForms["Form1"] as Form1).bmUrlText();
+                url = (Application.OpenForms["Form1"] as Form1).bmUrlText(); //A jelenlegi megnyitott url-t írja be alapnak hozzáadásnál
             }
 
-            var ib = Interaction.InputBox(webhely_cime, konyvjelzo_hozzaadasa, url);
-            if (ib.Contains("."))
+            var ib = Interaction.InputBox(webhely_cime, konyvjelzo_hozzaadasa, url); //VisualBasic inputbox az url címek megadásához
+            if (ib.Contains(".") || ib == "localhost") //Ha nincs benne pont vagy a megadott szöveg nem "localhost", akkor nem lehet url cím.
             { 
-                listBox1.Items.Add(ib);
-                using (StreamWriter sw = new StreamWriter("konyvjelzok.ini", true))
+                listBox1.Items.Add(ib); //A felhasználó által megadott adatot adjuk hozzá a listbox-hoz
+                using (StreamWriter writer = new StreamWriter("konyvjelzok.ini", true))
                 {
-                    sw.WriteLine(ib);
+                    writer.WriteLine(ib);
+                    valtozott = true;
                 }
             }
             else
@@ -123,7 +127,7 @@ namespace Browser_Alpha
             }
         }
 
-        private void listBox1_MouseDoubleClick(object sender, MouseEventArgs e)
+        private void listBox1_MouseDoubleClick(object sender, MouseEventArgs e) //Dupla kattintással töltsük be azt az oldalt amire kattintott majd zárjuk be a könyvjelző kezelőt
         {
             if (Application.OpenForms["Form1"] != null)
             {
@@ -133,14 +137,17 @@ namespace Browser_Alpha
 
         }
 
-        private void Bookmarks_FormClosing(object sender, FormClosingEventArgs e)
+        private void Bookmarks_FormClosing(object sender, FormClosingEventArgs e) //Könyvjelzők fájlba írása
         {
-            using (StreamWriter sw = new StreamWriter("konyvjelzok.ini", false))
+            if (valtozott) //Csak akkor írjon ha történt változás
             {
-
-                foreach (var item in listBox1.Items)
+                using (StreamWriter writer = new StreamWriter("konyvjelzok.ini", false))
                 {
-                    sw.WriteLine(item.ToString());
+                    foreach (var item in listBox1.Items)
+                    {
+                        writer.WriteLine(item.ToString());
+                    }
+                
                 }
             }
         }
