@@ -108,7 +108,7 @@ namespace Browser_Alpha
             string url = "http://www.";
             if (Application.OpenForms["Form1"] != null)
             {
-                url = (Application.OpenForms["Form1"] as Form1).bmUrlText(); //A jelenlegi megnyitott url-t írja be alapnak hozzáadásnál
+                url = (Application.OpenForms["Form1"] as Browser).bmUrlText(); //A jelenlegi megnyitott url-t írja be alapnak hozzáadásnál
             }
 
             var ib = Interaction.InputBox(webhely_cime, konyvjelzo_hozzaadasa, url); //VisualBasic inputbox az url címek megadásához
@@ -131,7 +131,7 @@ namespace Browser_Alpha
         {
             if (Application.OpenForms["Form1"] != null)
             {
-                (Application.OpenForms["Form1"] as Form1).bmLoad(listBox1.GetItemText(listBox1.SelectedItem));
+                (Application.OpenForms["Form1"] as Browser).bmLoad(listBox1.GetItemText(listBox1.SelectedItem));
             }
             this.Close();
 
@@ -147,7 +147,6 @@ namespace Browser_Alpha
                     {
                         writer.WriteLine(item.ToString());
                     }
-                
                 }
             }
         }

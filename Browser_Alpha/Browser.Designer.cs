@@ -1,6 +1,6 @@
 ﻿namespace Browser_Alpha
 {
-    partial class Form1
+    partial class Browser
     {
         /// <summary>
         /// Required designer variable.
@@ -29,7 +29,7 @@
         private void InitializeComponent()
         {
             this.components = new System.ComponentModel.Container();
-            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Form1));
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Browser));
             this.urlSav = new System.Windows.Forms.TextBox();
             this.googleKeresSav = new System.Windows.Forms.TextBox();
             this.visszaGomb = new System.Windows.Forms.Button();
@@ -304,7 +304,7 @@
             this.enToolStripMenuItem.Text = "en";
             this.enToolStripMenuItem.Click += new System.EventHandler(this.hu_enToolStripMenuItem_Click);
             // 
-            // Form1
+            // Browser
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
@@ -322,7 +322,7 @@
             this.Controls.Add(this.googleKeresSav);
             this.Controls.Add(this.urlSav);
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
-            this.Name = "Form1";
+            this.Name = "Browser";
             this.Text = "Egyszerű Webböngésző";
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.Form1_FormClosing);
             this.Load += new System.EventHandler(this.Form1_Load);

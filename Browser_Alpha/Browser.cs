@@ -17,10 +17,9 @@ using CefSharp.WinForms.Internals;
 using CefSharp.Example;
 using CefSharp.Example.Handlers;
 
-
 namespace Browser_Alpha
 {
-    public partial class Form1 : Form
+    public partial class Browser : Form
     {
         public string cim;
         public string kezdo_oldal;
@@ -55,7 +54,7 @@ namespace Browser_Alpha
 
         ToolTip tp = new ToolTip(); //Tooltip hogy később amikor a gombok fölé visszük az egeret kitudjuk iratni a gomb nevét
 
-        public Form1(string Nyelv) //Konstruktor ami megkapja a nyelvet majd annak függvényében tölti fel a fentebb telálható stringeket
+        public Browser(string Nyelv) //Konstruktor ami megkapja a nyelvet majd annak függvényében tölti fel a fentebb telálható stringeket
         {
             if (Nyelv == "hu") //Magyar
             {
@@ -474,7 +473,6 @@ namespace Browser_Alpha
                 mehet2();
             }
         }
-
 
         //Fent deklarált tooltip segítségével kiírjuk a gombok nevét ha fölé visszük az egeret (mert ugye ikonok vannak csak a gombon)
         private void visszaGomb_MouseHover(object sender, EventArgs e)

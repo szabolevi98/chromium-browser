@@ -29,7 +29,7 @@ namespace Browser_Alpha
                 nyelv = "hu"; //Legyen magyar
             }
 
-            Application.Run(new Form1(nyelv)); //Form1 megnyitása az adott nyelven
+            Application.Run(new Browser(nyelv)); //Form1 megnyitása az adott nyelven
         }
     }
 }
