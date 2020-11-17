@@ -29,23 +29,23 @@
         private void InitializeComponent()
         {
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Bookmarks));
-            this.listBox1 = new System.Windows.Forms.ListBox();
+            this.listBox = new System.Windows.Forms.ListBox();
             this.hozzaAdGomb = new System.Windows.Forms.Button();
             this.eltavolitGomb = new System.Windows.Forms.Button();
             this.eltavolitMindetGomb = new System.Windows.Forms.Button();
             this.SuspendLayout();
             // 
-            // listBox1
+            // listBox
             // 
-            this.listBox1.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            this.listBox.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
             | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.listBox1.FormattingEnabled = true;
-            this.listBox1.Location = new System.Drawing.Point(13, 13);
-            this.listBox1.Name = "listBox1";
-            this.listBox1.Size = new System.Drawing.Size(408, 173);
-            this.listBox1.TabIndex = 0;
-            this.listBox1.MouseDoubleClick += new System.Windows.Forms.MouseEventHandler(this.listBox1_MouseDoubleClick);
+            this.listBox.FormattingEnabled = true;
+            this.listBox.Location = new System.Drawing.Point(13, 13);
+            this.listBox.Name = "listBox";
+            this.listBox.Size = new System.Drawing.Size(408, 173);
+            this.listBox.TabIndex = 0;
+            this.listBox.MouseDoubleClick += new System.Windows.Forms.MouseEventHandler(this.ListBox_MouseDoubleClick);
             // 
             // hozzaAdGomb
             // 
@@ -56,7 +56,7 @@
             this.hozzaAdGomb.TabIndex = 1;
             this.hozzaAdGomb.Text = "Hozzáad";
             this.hozzaAdGomb.UseVisualStyleBackColor = true;
-            this.hozzaAdGomb.Click += new System.EventHandler(this.hozzaAdGomb_Click);
+            this.hozzaAdGomb.Click += new System.EventHandler(this.HozzaAdGomb_Click);
             // 
             // eltavolitGomb
             // 
@@ -67,7 +67,7 @@
             this.eltavolitGomb.TabIndex = 2;
             this.eltavolitGomb.Text = "Eltávolít";
             this.eltavolitGomb.UseVisualStyleBackColor = true;
-            this.eltavolitGomb.Click += new System.EventHandler(this.eltavolitGomb_Click);
+            this.eltavolitGomb.Click += new System.EventHandler(this.EltavolitGomb_Click);
             // 
             // eltavolitMindetGomb
             // 
@@ -78,7 +78,7 @@
             this.eltavolitMindetGomb.TabIndex = 3;
             this.eltavolitMindetGomb.Text = "Összes eltávolítása";
             this.eltavolitMindetGomb.UseVisualStyleBackColor = true;
-            this.eltavolitMindetGomb.Click += new System.EventHandler(this.eltavolitMindetGomb_Click);
+            this.eltavolitMindetGomb.Click += new System.EventHandler(this.EltavolitMindetGomb_Click);
             // 
             // Bookmarks
             // 
@@ -88,7 +88,7 @@
             this.Controls.Add(this.eltavolitMindetGomb);
             this.Controls.Add(this.eltavolitGomb);
             this.Controls.Add(this.hozzaAdGomb);
-            this.Controls.Add(this.listBox1);
+            this.Controls.Add(this.listBox);
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Name = "Bookmarks";
             this.Text = "Bookmarks";
@@ -100,7 +100,7 @@
 
         #endregion
 
-        private System.Windows.Forms.ListBox listBox1;
+        private System.Windows.Forms.ListBox listBox;
         private System.Windows.Forms.Button hozzaAdGomb;
         private System.Windows.Forms.Button eltavolitGomb;
         private System.Windows.Forms.Button eltavolitMindetGomb;

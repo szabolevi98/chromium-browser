@@ -42,7 +42,7 @@
             this.tabControl = new System.Windows.Forms.TabControl();
             this.tabPage1 = new System.Windows.Forms.TabPage();
             this.ujLapGomb = new System.Windows.Forms.Button();
-            this.contextMenuStrip1 = new System.Windows.Forms.ContextMenuStrip(this.components);
+            this.contextMenuStrip = new System.Windows.Forms.ContextMenuStrip(this.components);
             this.bookmarksToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.tempToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.bookmarkseditToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -54,8 +54,9 @@
             this.changelangToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.huToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.enToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.toolTip = new System.Windows.Forms.ToolTip(this.components);
             this.tabControl.SuspendLayout();
-            this.contextMenuStrip1.SuspendLayout();
+            this.contextMenuStrip.SuspendLayout();
             this.SuspendLayout();
             // 
             // urlSav
@@ -68,7 +69,7 @@
             this.urlSav.Size = new System.Drawing.Size(418, 26);
             this.urlSav.TabIndex = 1;
             this.urlSav.Text = "http://";
-            this.urlSav.KeyDown += new System.Windows.Forms.KeyEventHandler(this.urlSav_KeyDown);
+            this.urlSav.KeyDown += new System.Windows.Forms.KeyEventHandler(this.UrlSav_KeyDown);
             // 
             // googleKeresSav
             // 
@@ -79,8 +80,10 @@
             this.googleKeresSav.Size = new System.Drawing.Size(234, 26);
             this.googleKeresSav.TabIndex = 2;
             this.googleKeresSav.Text = "Google keresés...";
-            this.googleKeresSav.Click += new System.EventHandler(this.textBox2_Click);
-            this.googleKeresSav.KeyDown += new System.Windows.Forms.KeyEventHandler(this.googleKeresSav_KeyDown);
+            this.googleKeresSav.Click += new System.EventHandler(this.GoogleKeresSav_Clear);
+            this.googleKeresSav.KeyDown += new System.Windows.Forms.KeyEventHandler(this.GoogleKeresSav_KeyDown);
+            this.googleKeresSav.MouseEnter += new System.EventHandler(this.GoogleKeresSav_Clear);
+            this.googleKeresSav.MouseLeave += new System.EventHandler(this.GoogleKeresSav_MouseLeave);
             // 
             // visszaGomb
             // 
@@ -91,8 +94,8 @@
             this.visszaGomb.Size = new System.Drawing.Size(41, 36);
             this.visszaGomb.TabIndex = 3;
             this.visszaGomb.UseVisualStyleBackColor = true;
-            this.visszaGomb.Click += new System.EventHandler(this.visszaGomb_Click);
-            this.visszaGomb.MouseHover += new System.EventHandler(this.visszaGomb_MouseHover);
+            this.visszaGomb.Click += new System.EventHandler(this.VisszaGomb_Click);
+            this.visszaGomb.MouseHover += new System.EventHandler(this.VisszaGomb_MouseHover);
             // 
             // eloreGomb
             // 
@@ -104,8 +107,8 @@
             this.eloreGomb.Size = new System.Drawing.Size(41, 36);
             this.eloreGomb.TabIndex = 4;
             this.eloreGomb.UseVisualStyleBackColor = true;
-            this.eloreGomb.Click += new System.EventHandler(this.eloreGomb_Click);
-            this.eloreGomb.MouseHover += new System.EventHandler(this.eloreGomb_MouseHover);
+            this.eloreGomb.Click += new System.EventHandler(this.EloreGomb_Click);
+            this.eloreGomb.MouseHover += new System.EventHandler(this.EloreGomb_MouseHover);
             // 
             // ujraGomb
             // 
@@ -116,8 +119,8 @@
             this.ujraGomb.Size = new System.Drawing.Size(41, 36);
             this.ujraGomb.TabIndex = 5;
             this.ujraGomb.UseVisualStyleBackColor = true;
-            this.ujraGomb.Click += new System.EventHandler(this.ujraGomb_Click);
-            this.ujraGomb.MouseHover += new System.EventHandler(this.ujraGomb_MouseHover);
+            this.ujraGomb.Click += new System.EventHandler(this.UjraGomb_Click);
+            this.ujraGomb.MouseHover += new System.EventHandler(this.UjraGomb_MouseHover);
             // 
             // urlKeresGomb
             // 
@@ -129,8 +132,8 @@
             this.urlKeresGomb.Size = new System.Drawing.Size(41, 36);
             this.urlKeresGomb.TabIndex = 6;
             this.urlKeresGomb.UseVisualStyleBackColor = true;
-            this.urlKeresGomb.Click += new System.EventHandler(this.urlKeresGomb_Click);
-            this.urlKeresGomb.MouseHover += new System.EventHandler(this.urlKeresGomb_MouseHover);
+            this.urlKeresGomb.Click += new System.EventHandler(this.UrlKeresGomb_Click);
+            this.urlKeresGomb.MouseHover += new System.EventHandler(this.UrlKeresGomb_MouseHover);
             // 
             // googleKeresGomb
             // 
@@ -142,8 +145,8 @@
             this.googleKeresGomb.Size = new System.Drawing.Size(41, 36);
             this.googleKeresGomb.TabIndex = 7;
             this.googleKeresGomb.UseVisualStyleBackColor = true;
-            this.googleKeresGomb.Click += new System.EventHandler(this.googleKeresGomb_Click);
-            this.googleKeresGomb.MouseHover += new System.EventHandler(this.googleKeresGomb_MouseHover);
+            this.googleKeresGomb.Click += new System.EventHandler(this.GoogleKeresGomb_Click);
+            this.googleKeresGomb.MouseHover += new System.EventHandler(this.GoogleKeresGomb_MouseHover);
             // 
             // kezdoGomb
             // 
@@ -155,8 +158,8 @@
             this.kezdoGomb.Size = new System.Drawing.Size(41, 36);
             this.kezdoGomb.TabIndex = 8;
             this.kezdoGomb.UseVisualStyleBackColor = true;
-            this.kezdoGomb.Click += new System.EventHandler(this.kezdoGomb_Click);
-            this.kezdoGomb.MouseHover += new System.EventHandler(this.kezdoGomb_MouseHover);
+            this.kezdoGomb.Click += new System.EventHandler(this.KezdoGomb_Click);
+            this.kezdoGomb.MouseHover += new System.EventHandler(this.KezdoGomb_MouseHover);
             // 
             // infGomb
             // 
@@ -168,8 +171,8 @@
             this.infGomb.Size = new System.Drawing.Size(41, 36);
             this.infGomb.TabIndex = 9;
             this.infGomb.UseVisualStyleBackColor = true;
-            this.infGomb.Click += new System.EventHandler(this.infGomb_Click);
-            this.infGomb.MouseHover += new System.EventHandler(this.infGomb_MouseHover);
+            this.infGomb.Click += new System.EventHandler(this.InfGomb_Click);
+            this.infGomb.MouseHover += new System.EventHandler(this.InfGomb_MouseHover);
             // 
             // tabControl
             // 
@@ -184,9 +187,9 @@
             this.tabControl.SelectedIndex = 0;
             this.tabControl.Size = new System.Drawing.Size(1068, 618);
             this.tabControl.TabIndex = 1;
-            this.tabControl.DrawItem += new System.Windows.Forms.DrawItemEventHandler(this.tabControl_DrawItem);
-            this.tabControl.Click += new System.EventHandler(this.tabControl_Click);
-            this.tabControl.MouseDown += new System.Windows.Forms.MouseEventHandler(this.tabControl_MouseDown);
+            this.tabControl.DrawItem += new System.Windows.Forms.DrawItemEventHandler(this.TabControl_DrawItem);
+            this.tabControl.Click += new System.EventHandler(this.TabControl_Click);
+            this.tabControl.MouseDown += new System.Windows.Forms.MouseEventHandler(this.TabControl_MouseDown);
             // 
             // tabPage1
             // 
@@ -207,12 +210,12 @@
             this.ujLapGomb.Size = new System.Drawing.Size(41, 36);
             this.ujLapGomb.TabIndex = 11;
             this.ujLapGomb.UseVisualStyleBackColor = true;
-            this.ujLapGomb.Click += new System.EventHandler(this.ujLapGomb_Click);
-            this.ujLapGomb.MouseHover += new System.EventHandler(this.ujLapGomb_MouseHover);
+            this.ujLapGomb.Click += new System.EventHandler(this.UjLapGomb_Click);
+            this.ujLapGomb.MouseHover += new System.EventHandler(this.UjLapGomb_MouseHover);
             // 
-            // contextMenuStrip1
+            // contextMenuStrip
             // 
-            this.contextMenuStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.contextMenuStrip.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.bookmarksToolStripMenuItem,
             this.bookmarkseditToolStripMenuItem,
             this.homepageToolStripMenuItem,
@@ -221,9 +224,9 @@
             this.proginfToolStripMenuItem,
             this.toolStripMenuItem2,
             this.changelangToolStripMenuItem});
-            this.contextMenuStrip1.Name = "contextMenuStrip1";
-            this.contextMenuStrip1.ShowImageMargin = false;
-            this.contextMenuStrip1.Size = new System.Drawing.Size(134, 148);
+            this.contextMenuStrip.Name = "contextMenuStrip1";
+            this.contextMenuStrip.ShowImageMargin = false;
+            this.contextMenuStrip.Size = new System.Drawing.Size(134, 148);
             // 
             // bookmarksToolStripMenuItem
             // 
@@ -246,14 +249,14 @@
             this.bookmarkseditToolStripMenuItem.Name = "bookmarkseditToolStripMenuItem";
             this.bookmarkseditToolStripMenuItem.Size = new System.Drawing.Size(133, 22);
             this.bookmarkseditToolStripMenuItem.Text = "bookmarks_edit";
-            this.bookmarkseditToolStripMenuItem.Click += new System.EventHandler(this.bookmarkseditToolStripMenuItem_Click);
+            this.bookmarkseditToolStripMenuItem.Click += new System.EventHandler(this.BookmarkseditToolStripMenuItem_Click);
             // 
             // homepageToolStripMenuItem
             // 
             this.homepageToolStripMenuItem.Name = "homepageToolStripMenuItem";
             this.homepageToolStripMenuItem.Size = new System.Drawing.Size(133, 22);
             this.homepageToolStripMenuItem.Text = "homepage";
-            this.homepageToolStripMenuItem.Click += new System.EventHandler(this.homepageToolStripMenuItem_Click);
+            this.homepageToolStripMenuItem.Click += new System.EventHandler(this.HomepageToolStripMenuItem_Click);
             // 
             // toolStripMenuItem1
             // 
@@ -265,14 +268,14 @@
             this.chrminfToolStripMenuItem.Name = "chrminfToolStripMenuItem";
             this.chrminfToolStripMenuItem.Size = new System.Drawing.Size(133, 22);
             this.chrminfToolStripMenuItem.Text = "chrm_inf";
-            this.chrminfToolStripMenuItem.Click += new System.EventHandler(this.chrminfToolStripMenuItem_Click);
+            this.chrminfToolStripMenuItem.Click += new System.EventHandler(this.ChrminfToolStripMenuItem_Click);
             // 
             // proginfToolStripMenuItem
             // 
             this.proginfToolStripMenuItem.Name = "proginfToolStripMenuItem";
             this.proginfToolStripMenuItem.Size = new System.Drawing.Size(133, 22);
             this.proginfToolStripMenuItem.Text = "prog_inf";
-            this.proginfToolStripMenuItem.Click += new System.EventHandler(this.proginfToolStripMenuItem_Click);
+            this.proginfToolStripMenuItem.Click += new System.EventHandler(this.ProginfToolStripMenuItem_Click);
             // 
             // toolStripMenuItem2
             // 
@@ -294,7 +297,7 @@
             this.huToolStripMenuItem.Name = "huToolStripMenuItem";
             this.huToolStripMenuItem.Size = new System.Drawing.Size(88, 22);
             this.huToolStripMenuItem.Text = "hu";
-            this.huToolStripMenuItem.Click += new System.EventHandler(this.hu_enToolStripMenuItem_Click);
+            this.huToolStripMenuItem.Click += new System.EventHandler(this.Hu_enToolStripMenuItem_Click);
             // 
             // enToolStripMenuItem
             // 
@@ -302,7 +305,7 @@
             this.enToolStripMenuItem.Name = "enToolStripMenuItem";
             this.enToolStripMenuItem.Size = new System.Drawing.Size(88, 22);
             this.enToolStripMenuItem.Text = "en";
-            this.enToolStripMenuItem.Click += new System.EventHandler(this.hu_enToolStripMenuItem_Click);
+            this.enToolStripMenuItem.Click += new System.EventHandler(this.Hu_enToolStripMenuItem_Click);
             // 
             // Browser
             // 
@@ -324,10 +327,10 @@
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Name = "Browser";
             this.Text = "Egyszerű Webböngésző";
-            this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.Form1_FormClosing);
-            this.Load += new System.EventHandler(this.Form1_Load);
+            this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.Browser_FormClosing);
+            this.Load += new System.EventHandler(this.Browser_Load);
             this.tabControl.ResumeLayout(false);
-            this.contextMenuStrip1.ResumeLayout(false);
+            this.contextMenuStrip.ResumeLayout(false);
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -345,7 +348,7 @@
         private System.Windows.Forms.Button infGomb;
         private System.Windows.Forms.TabControl tabControl;
         private System.Windows.Forms.Button ujLapGomb;
-        private System.Windows.Forms.ContextMenuStrip contextMenuStrip1;
+        private System.Windows.Forms.ContextMenuStrip contextMenuStrip;
         private System.Windows.Forms.ToolStripMenuItem chrminfToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem proginfToolStripMenuItem;
         private System.Windows.Forms.TabPage tabPage1;
@@ -358,6 +361,7 @@
         private System.Windows.Forms.ToolStripMenuItem huToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem enToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem tempToolStripMenuItem;
+        private System.Windows.Forms.ToolTip toolTip;
     }
 }
 
