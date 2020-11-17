@@ -64,9 +64,9 @@
             this.urlSav.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
             this.urlSav.Font = new System.Drawing.Font("Microsoft Sans Serif", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(238)));
-            this.urlSav.Location = new System.Drawing.Point(153, 15);
+            this.urlSav.Location = new System.Drawing.Point(118, 12);
             this.urlSav.Name = "urlSav";
-            this.urlSav.Size = new System.Drawing.Size(418, 26);
+            this.urlSav.Size = new System.Drawing.Size(534, 26);
             this.urlSav.TabIndex = 1;
             this.urlSav.Text = "http://";
             this.urlSav.KeyDown += new System.Windows.Forms.KeyEventHandler(this.UrlSav_KeyDown);
@@ -75,23 +75,22 @@
             // 
             this.googleKeresSav.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.googleKeresSav.Font = new System.Drawing.Font("Microsoft Sans Serif", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(238)));
-            this.googleKeresSav.Location = new System.Drawing.Point(673, 15);
+            this.googleKeresSav.Location = new System.Drawing.Point(730, 12);
             this.googleKeresSav.Name = "googleKeresSav";
-            this.googleKeresSav.Size = new System.Drawing.Size(234, 26);
+            this.googleKeresSav.Size = new System.Drawing.Size(216, 26);
             this.googleKeresSav.TabIndex = 2;
             this.googleKeresSav.Text = "Google keresés...";
-            this.googleKeresSav.Click += new System.EventHandler(this.GoogleKeresSav_Clear);
+            this.googleKeresSav.Click += new System.EventHandler(this.GoogleKeresSav_Click);
             this.googleKeresSav.KeyDown += new System.Windows.Forms.KeyEventHandler(this.GoogleKeresSav_KeyDown);
-            this.googleKeresSav.MouseEnter += new System.EventHandler(this.GoogleKeresSav_Clear);
-            this.googleKeresSav.MouseLeave += new System.EventHandler(this.GoogleKeresSav_MouseLeave);
+            this.googleKeresSav.Leave += new System.EventHandler(this.googleKeresSav_Leave);
             // 
             // visszaGomb
             // 
             this.visszaGomb.BackgroundImage = global::Browser_Alpha.Properties.Resources.back;
             this.visszaGomb.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Zoom;
-            this.visszaGomb.Location = new System.Drawing.Point(12, 10);
+            this.visszaGomb.Location = new System.Drawing.Point(10, 10);
             this.visszaGomb.Name = "visszaGomb";
-            this.visszaGomb.Size = new System.Drawing.Size(41, 36);
+            this.visszaGomb.Size = new System.Drawing.Size(30, 30);
             this.visszaGomb.TabIndex = 3;
             this.visszaGomb.UseVisualStyleBackColor = true;
             this.visszaGomb.Click += new System.EventHandler(this.VisszaGomb_Click);
@@ -102,9 +101,9 @@
             this.eloreGomb.BackgroundImage = global::Browser_Alpha.Properties.Resources.next;
             this.eloreGomb.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Zoom;
             this.eloreGomb.ForeColor = System.Drawing.SystemColors.ControlText;
-            this.eloreGomb.Location = new System.Drawing.Point(59, 10);
+            this.eloreGomb.Location = new System.Drawing.Point(46, 10);
             this.eloreGomb.Name = "eloreGomb";
-            this.eloreGomb.Size = new System.Drawing.Size(41, 36);
+            this.eloreGomb.Size = new System.Drawing.Size(30, 30);
             this.eloreGomb.TabIndex = 4;
             this.eloreGomb.UseVisualStyleBackColor = true;
             this.eloreGomb.Click += new System.EventHandler(this.EloreGomb_Click);
@@ -114,9 +113,9 @@
             // 
             this.ujraGomb.BackgroundImage = global::Browser_Alpha.Properties.Resources.redo_grey_512;
             this.ujraGomb.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Zoom;
-            this.ujraGomb.Location = new System.Drawing.Point(106, 10);
+            this.ujraGomb.Location = new System.Drawing.Point(82, 10);
             this.ujraGomb.Name = "ujraGomb";
-            this.ujraGomb.Size = new System.Drawing.Size(41, 36);
+            this.ujraGomb.Size = new System.Drawing.Size(30, 30);
             this.ujraGomb.TabIndex = 5;
             this.ujraGomb.UseVisualStyleBackColor = true;
             this.ujraGomb.Click += new System.EventHandler(this.UjraGomb_Click);
@@ -127,9 +126,9 @@
             this.urlKeresGomb.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.urlKeresGomb.BackgroundImage = global::Browser_Alpha.Properties.Resources.search_grey_512;
             this.urlKeresGomb.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Zoom;
-            this.urlKeresGomb.Location = new System.Drawing.Point(579, 10);
+            this.urlKeresGomb.Location = new System.Drawing.Point(658, 10);
             this.urlKeresGomb.Name = "urlKeresGomb";
-            this.urlKeresGomb.Size = new System.Drawing.Size(41, 36);
+            this.urlKeresGomb.Size = new System.Drawing.Size(30, 30);
             this.urlKeresGomb.TabIndex = 6;
             this.urlKeresGomb.UseVisualStyleBackColor = true;
             this.urlKeresGomb.Click += new System.EventHandler(this.UrlKeresGomb_Click);
@@ -140,9 +139,9 @@
             this.googleKeresGomb.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.googleKeresGomb.BackgroundImage = global::Browser_Alpha.Properties.Resources.search_grey_512;
             this.googleKeresGomb.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Zoom;
-            this.googleKeresGomb.Location = new System.Drawing.Point(913, 10);
+            this.googleKeresGomb.Location = new System.Drawing.Point(952, 10);
             this.googleKeresGomb.Name = "googleKeresGomb";
-            this.googleKeresGomb.Size = new System.Drawing.Size(41, 36);
+            this.googleKeresGomb.Size = new System.Drawing.Size(30, 30);
             this.googleKeresGomb.TabIndex = 7;
             this.googleKeresGomb.UseVisualStyleBackColor = true;
             this.googleKeresGomb.Click += new System.EventHandler(this.GoogleKeresGomb_Click);
@@ -153,9 +152,9 @@
             this.kezdoGomb.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.kezdoGomb.BackgroundImage = global::Browser_Alpha.Properties.Resources.home_grey_512;
             this.kezdoGomb.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Zoom;
-            this.kezdoGomb.Location = new System.Drawing.Point(960, 10);
+            this.kezdoGomb.Location = new System.Drawing.Point(988, 10);
             this.kezdoGomb.Name = "kezdoGomb";
-            this.kezdoGomb.Size = new System.Drawing.Size(41, 36);
+            this.kezdoGomb.Size = new System.Drawing.Size(30, 30);
             this.kezdoGomb.TabIndex = 8;
             this.kezdoGomb.UseVisualStyleBackColor = true;
             this.kezdoGomb.Click += new System.EventHandler(this.KezdoGomb_Click);
@@ -166,9 +165,9 @@
             this.infGomb.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.infGomb.BackgroundImage = global::Browser_Alpha.Properties.Resources.settings_grey_512;
             this.infGomb.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Zoom;
-            this.infGomb.Location = new System.Drawing.Point(1007, 10);
+            this.infGomb.Location = new System.Drawing.Point(1024, 10);
             this.infGomb.Name = "infGomb";
-            this.infGomb.Size = new System.Drawing.Size(41, 36);
+            this.infGomb.Size = new System.Drawing.Size(30, 30);
             this.infGomb.TabIndex = 9;
             this.infGomb.UseVisualStyleBackColor = true;
             this.infGomb.Click += new System.EventHandler(this.InfGomb_Click);
@@ -182,10 +181,10 @@
             | System.Windows.Forms.AnchorStyles.Right)));
             this.tabControl.Controls.Add(this.tabPage1);
             this.tabControl.DrawMode = System.Windows.Forms.TabDrawMode.OwnerDrawFixed;
-            this.tabControl.Location = new System.Drawing.Point(-4, 52);
+            this.tabControl.Location = new System.Drawing.Point(-4, 44);
             this.tabControl.Name = "tabControl";
             this.tabControl.SelectedIndex = 0;
-            this.tabControl.Size = new System.Drawing.Size(1068, 618);
+            this.tabControl.Size = new System.Drawing.Size(1072, 541);
             this.tabControl.TabIndex = 1;
             this.tabControl.DrawItem += new System.Windows.Forms.DrawItemEventHandler(this.TabControl_DrawItem);
             this.tabControl.Click += new System.EventHandler(this.TabControl_Click);
@@ -197,7 +196,7 @@
             this.tabPage1.Location = new System.Drawing.Point(4, 22);
             this.tabPage1.Name = "tabPage1";
             this.tabPage1.Padding = new System.Windows.Forms.Padding(3);
-            this.tabPage1.Size = new System.Drawing.Size(1060, 592);
+            this.tabPage1.Size = new System.Drawing.Size(1064, 515);
             this.tabPage1.TabIndex = 0;
             this.tabPage1.UseVisualStyleBackColor = true;
             // 
@@ -206,9 +205,9 @@
             this.ujLapGomb.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.ujLapGomb.BackgroundImage = ((System.Drawing.Image)(resources.GetObject("ujLapGomb.BackgroundImage")));
             this.ujLapGomb.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Zoom;
-            this.ujLapGomb.Location = new System.Drawing.Point(626, 10);
+            this.ujLapGomb.Location = new System.Drawing.Point(694, 10);
             this.ujLapGomb.Name = "ujLapGomb";
-            this.ujLapGomb.Size = new System.Drawing.Size(41, 36);
+            this.ujLapGomb.Size = new System.Drawing.Size(30, 30);
             this.ujLapGomb.TabIndex = 11;
             this.ujLapGomb.UseVisualStyleBackColor = true;
             this.ujLapGomb.Click += new System.EventHandler(this.UjLapGomb_Click);
@@ -313,7 +312,7 @@
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.SystemColors.Control;
-            this.ClientSize = new System.Drawing.Size(1060, 666);
+            this.ClientSize = new System.Drawing.Size(1064, 581);
             this.Controls.Add(this.ujLapGomb);
             this.Controls.Add(this.tabControl);
             this.Controls.Add(this.infGomb);
@@ -327,6 +326,7 @@
             this.Controls.Add(this.urlSav);
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Name = "Browser";
+            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.Text = "Egyszerű Webböngésző";
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.Browser_FormClosing);
             this.Load += new System.EventHandler(this.Browser_Load);

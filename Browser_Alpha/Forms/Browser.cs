@@ -197,7 +197,7 @@ namespace Browser_Alpha
 
         }
 
-        private void GoogleKeresSav_Clear(object sender, EventArgs e)
+        private void GoogleKeresSav_Click(object sender, EventArgs e)
         {
             if (googleKeresSav.Text == kereso_szoveg)
             {
@@ -205,7 +205,7 @@ namespace Browser_Alpha
             }
         }
 
-        private void GoogleKeresSav_MouseLeave(object sender, EventArgs e)
+        private void googleKeresSav_Leave(object sender, EventArgs e)
         {
             if (string.IsNullOrEmpty(googleKeresSav.Text))
             {
