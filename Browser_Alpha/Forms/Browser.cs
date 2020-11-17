@@ -13,7 +13,6 @@ using Microsoft.VisualBasic;
 using CefSharp;
 using CefSharp.WinForms;
 using CefSharp.WinForms.Internals;
-using CefSharp.Example;
 using CefSharp.Example.Handlers;
 
 namespace Browser_Alpha
@@ -189,16 +188,12 @@ namespace Browser_Alpha
 
         private ChromiumWebBrowser GetCurrentChrm()
         {
-            try
-            {
-                return (ChromiumWebBrowser)tabControl.SelectedTab.Controls[0];
-            }
-            catch (Exception)
+            if (tabControl.SelectedTab == null)
             {
                 MessageBox.Show(nincs_lap, hiba, MessageBoxButtons.OK, MessageBoxIcon.Error);
-                ujLapGomb.PerformClick(); 
-                return (ChromiumWebBrowser)tabControl.SelectedTab.Controls[0];
+                ujLapGomb.PerformClick();
             }
+            return (ChromiumWebBrowser)tabControl.SelectedTab.Controls[0];
 
         }
 
@@ -212,7 +207,7 @@ namespace Browser_Alpha
 
         private void GoogleKeresSav_MouseLeave(object sender, EventArgs e)
         {
-            if (googleKeresSav.Text == "")
+            if (string.IsNullOrEmpty(googleKeresSav.Text))
             {
                 googleKeresSav.Text = kereso_szoveg;
             }
@@ -220,7 +215,7 @@ namespace Browser_Alpha
 
         private void Mehet()
         {
-            if (urlSav.Text == "")
+            if (string.IsNullOrEmpty(urlSav.Text))
             {
                 MessageBox.Show(nincs_url, hiba, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
@@ -244,7 +239,7 @@ namespace Browser_Alpha
         }
         private void MehetGoogle()
         {
-            if (googleKeresSav.Text == "" || googleKeresSav.Text == kereso_szoveg)
+            if (string.IsNullOrEmpty(googleKeresSav.Text) || googleKeresSav.Text == kereso_szoveg)
             {
                 MessageBox.Show(nincs_szoveg, hiba, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
@@ -269,7 +264,7 @@ namespace Browser_Alpha
 
         private void Chrm_TitleChanged(object sender, TitleChangedEventArgs e)
         {
-            string tmp = "";
+            string tmp = string.Empty;
             if (e.Title.Length > 20)
                 tmp = e.Title.Substring(0, 17) + "...";
             else
@@ -321,6 +316,7 @@ namespace Browser_Alpha
                 if (xGomb.Contains(e.Location))
                 {
                     ChromiumWebBrowser chrm = GetCurrentChrm();
+                    tabControl.TabPages[i].Controls.Remove(chrm);
                     chrm.Dispose();
                     this.tabControl.TabPages.RemoveAt(i);
                 }
@@ -534,7 +530,7 @@ namespace Browser_Alpha
             }
 
             var ib = Interaction.InputBox(uj_kezdolap_cime, kezdolap_valtas, http_text);
-            if (ib != "")
+            if (!string.IsNullOrEmpty(ib))
             { 
                 using (StreamWriter writer = new StreamWriter("kezdolap.ini", false))
                 {

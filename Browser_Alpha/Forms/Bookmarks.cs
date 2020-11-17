@@ -111,7 +111,7 @@ namespace Browser_Alpha
             }
 
             var ib = Interaction.InputBox(webhely_cime, konyvjelzo_hozzaadasa, url);
-            if (ib != "")
+            if (!string.IsNullOrEmpty(ib))
             {
                 if (ib.Contains(".") || ib == "localhost")
                 {
