@@ -1,5 +1,4 @@
 # Browser_Alpha 1.0.0.1
-### .Net FrameWork 4.7.2
 -ChromiumWebBrowser (CefSharp)  
 -Google keresés  
 -Több lap kezelése  
