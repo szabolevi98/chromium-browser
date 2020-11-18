@@ -121,8 +121,8 @@
     <Compile Include="Forms\Bookmarks.Designer.cs">
       <DependentUpon>Bookmarks.cs</DependentUpon>
     </Compile>
-    <Compile Include="CefClasses\ControlExtensions.cs" />
-    <Compile Include="CefClasses\DownloadHandler.cs" />
+    <Compile Include="Cef_Classes\ControlExtensions.cs" />
+    <Compile Include="Cef_Classes\DownloadHandler.cs" />
     <Compile Include="Forms\Browser.cs">
       <SubType>Form</SubType>
     </Compile>
