@@ -1,9 +1,49 @@
-# Browser_Alpha 1.0.0.1
--ChromiumWebBrowser (CefSharp)  
--Google keresés  
--Több lap kezelése  
--Könyvjelzők + kezelő  
--Kezdőlap + módosítás  
--Nyelv váltás (HU, EN)  
-  
-![Screenshot](Browser_Alpha.png?raw=true "Browser_Alpha")
+# Chromium Browser
+
+A portable web browser built on the Chromium engine: unpack it anywhere, run it,
+and it keeps its history, bookmarks and settings in a folder beside itself. There
+is nothing to install and nothing is written to the registry.
+
+> **2.0 is being written now.** The 2020 version that used to live here is kept
+> on the [`2020_variant`](https://github.com/szabolevi98/chromium-browser/tree/2020_variant)
+> branch and as [release v1.0.1](https://github.com/szabolevi98/chromium-browser/releases/tag/v1.0.1).
+> It is not being modernised — it is being replaced, from an empty folder.
+
+## Where it is
+
+- [x] The engine runs: CefSharp 152 (Chromium 152) on .NET 9, x64
+- [x] A portable profile: everything the browser remembers sits beside the
+      executable, falling back to the user profile only when that folder cannot
+      be written to
+- [ ] Tabs, drawn rather than assembled
+- [ ] One bar for addresses and searches
+- [ ] Bookmarks, history and downloads
+- [ ] Settings, and a light and dark theme
+- [ ] Session restore, private windows, find in page
+
+## What 2.0 has to do at least
+
+Everything the 2020 version did, which was: several tabs, a search box, bookmarks
+with a manager, a home page that can be changed, a download handler, and a
+Hungarian/English switch. That is the floor, not the target.
+
+## Building
+
+Needs the .NET 9 SDK.
+
+```
+dotnet build ChromiumBrowser.sln
+dotnet run --project tests/ChromiumBrowser.Tests
+```
+
+## Layout
+
+```
+src/ChromiumBrowser        the Windows Forms application
+src/ChromiumBrowser.Core   profile, bookmarks, history, settings — no user interface
+tests/ChromiumBrowser.Tests offline checks
+```
+
+## License
+
+MIT. See [LICENSE](LICENSE).
