@@ -16,6 +16,8 @@ public enum BrowserCommand
     ZoomReset,
     Print,
     BookmarkPage,
+    ShowHistory,
+    ShowDownloads,
 }
 
 /// <summary>
@@ -85,6 +87,8 @@ public sealed class ShortcutHandler : IKeyboardHandler
         Keys.R when control => BrowserCommand.Reload,
         Keys.P when control => BrowserCommand.Print,
         Keys.D when control => BrowserCommand.BookmarkPage,
+        Keys.H when control => BrowserCommand.ShowHistory,
+        Keys.J when control => BrowserCommand.ShowDownloads,
         Keys.D0 or Keys.NumPad0 when control => BrowserCommand.ZoomReset,
 
         // The plus and minus keys arrive under several names depending on
