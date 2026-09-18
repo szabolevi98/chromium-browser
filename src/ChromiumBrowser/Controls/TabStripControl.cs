@@ -398,6 +398,13 @@ public sealed class TabStripControl : Control
             g.DrawImage(tab.Icon, new Rectangle(left, iconTop, iconSize, iconSize));
             left += iconSize + (int)(8 * UiScale);
         }
+        else
+        {
+            // A site with no icon of its own still gets the space, so titles do
+            // not jump sideways the moment an icon arrives.
+            DrawBlankPage(g, palette, new Rectangle(left, iconTop, iconSize, iconSize));
+            left += iconSize + (int)(8 * UiScale);
+        }
 
         Rectangle closeRect = CloseRect(bounds);
         int textRight = (active || hovered) ? closeRect.X - (int)(4 * UiScale) : rect.Right - (int)(8 * UiScale);
@@ -454,6 +461,27 @@ public sealed class TabStripControl : Control
         using Pen pen = new(palette.TextMuted, 1.4f * UiScale);
         g.DrawLine(pen, rect.Left + pad, rect.Top + (rect.Height / 2), rect.Right - pad, rect.Top + (rect.Height / 2));
         g.DrawLine(pen, rect.Left + (rect.Width / 2), rect.Top + pad, rect.Left + (rect.Width / 2), rect.Bottom - pad);
+    }
+
+    /// <summary>A sheet of paper with its corner turned, for a site with no icon.</summary>
+    private void DrawBlankPage(Graphics g, Palette palette, Rectangle rect)
+    {
+        int fold = (int)(5 * UiScale);
+        rect.Inflate(-(int)(2 * UiScale), -(int)(1 * UiScale));
+
+        using Pen pen = new(palette.TextMuted, 1.2f * UiScale);
+        Point[] outline =
+        [
+            new(rect.Left, rect.Top),
+            new(rect.Right - fold, rect.Top),
+            new(rect.Right, rect.Top + fold),
+            new(rect.Right, rect.Bottom),
+            new(rect.Left, rect.Bottom),
+        ];
+
+        g.DrawPolygon(pen, outline);
+        g.DrawLine(pen, rect.Right - fold, rect.Top, rect.Right - fold, rect.Top + fold);
+        g.DrawLine(pen, rect.Right - fold, rect.Top + fold, rect.Right, rect.Top + fold);
     }
 
     /// <summary>A quarter-circle arc that turns while a page is loading.</summary>

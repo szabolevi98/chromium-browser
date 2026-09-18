@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using CefSharp;
 using CefSharp.WinForms;
+using ChromiumBrowser.Browser;
 using ChromiumBrowser.Controls;
 using ChromiumBrowser.Core;
 using ChromiumBrowser.Core.Profile;
@@ -40,6 +41,9 @@ public sealed class BrowserWindow : Form
     private readonly Panel _pages = new() { Dock = DockStyle.None };
     private readonly List<ChromiumWebBrowser> _browsers = [];
 
+    /// <summary>The zoom each page is at, which the engine does not hand back synchronously.</summary>
+    private readonly Dictionary<ChromiumWebBrowser, double> _zoom = [];
+
     public BrowserWindow(ProfileLocation profile, string? startUrl)
     {
         _profile = profile;
@@ -68,6 +72,7 @@ public sealed class BrowserWindow : Form
         _toolbar.StopRequested += (_, _) => Selected?.Stop();
         _toolbar.HomeRequested += (_, _) => Selected?.LoadUrl(HomePage);
         _toolbar.Navigated += (_, typed) => Selected?.LoadUrl(AsUrl(typed));
+        _toolbar.MenuRequested += (_, at) => ShowMenu(_toolbar.PointToScreen(at));
 
         Controls.Add(_pages);
         Controls.Add(_toolbar);
@@ -143,6 +148,29 @@ public sealed class BrowserWindow : Form
             }
         });
 
+        browser.KeyboardHandler = new ShortcutHandler(shortcut => OnUiThread(() => Run(shortcut)));
+
+        browser.DisplayHandler = new FaviconWatcher(async url =>
+        {
+            Image? icon = await FaviconCache.GetAsync(url).ConfigureAwait(false);
+            if (icon is null)
+            {
+                return;
+            }
+
+            OnUiThread(() =>
+            {
+                int at = _browsers.IndexOf(browser);
+                if (at < 0)
+                {
+                    return;
+                }
+
+                _tabStrip.Tabs[at].Icon = icon;
+                _tabStrip.Refresh(at);
+            });
+        });
+
         _browsers.Add(browser);
         _pages.Controls.Add(browser);
         browser.CreateControl();
@@ -165,6 +193,7 @@ public sealed class BrowserWindow : Form
 
         ChromiumWebBrowser browser = _browsers[index];
         _browsers.RemoveAt(index);
+        _zoom.Remove(browser);
         _pages.Controls.Remove(browser);
         browser.Dispose();
 
@@ -208,6 +237,115 @@ public sealed class BrowserWindow : Form
         {
             Text = $"{_tabStrip.Tabs[at].Title} - {Branding.Name}";
         }
+    }
+
+    // --------------------------------------------------------------- commands
+
+    /// <summary>
+    /// The window's own keys, for when the chrome has the focus. The page has
+    /// its own path through <see cref="ShortcutHandler"/>, and both read the
+    /// same table so the two can never drift apart.
+    /// </summary>
+    protected override bool ProcessCmdKey(ref Message message, Keys keyData)
+    {
+        BrowserCommand? shortcut = ShortcutHandler.Match(
+            (int)(keyData & Keys.KeyCode),
+            keyData.HasFlag(Keys.Control),
+            keyData.HasFlag(Keys.Shift));
+
+        if (shortcut is null)
+        {
+            return base.ProcessCmdKey(ref message, keyData);
+        }
+
+        Run(shortcut.Value);
+        return true;
+    }
+
+    private void Run(BrowserCommand shortcut)
+    {
+        switch (shortcut)
+        {
+            case BrowserCommand.NewTab: OpenTab(HomePage); break;
+            case BrowserCommand.CloseTab: CloseTab(_tabStrip.SelectedIndex); break;
+            case BrowserCommand.NextTab: StepTab(1); break;
+            case BrowserCommand.PreviousTab: StepTab(-1); break;
+            case BrowserCommand.FocusAddress: _toolbar.FocusAddress(); break;
+            case BrowserCommand.Reload: Selected?.Reload(); break;
+            case BrowserCommand.Print: Selected?.Print(); break;
+            case BrowserCommand.ZoomIn: Zoom(0.5); break;
+            case BrowserCommand.ZoomOut: Zoom(-0.5); break;
+            case BrowserCommand.ZoomReset: Zoom(null); break;
+        }
+    }
+
+    private void StepTab(int direction)
+    {
+        if (_tabStrip.Tabs.Count < 2)
+        {
+            return;
+        }
+
+        int count = _tabStrip.Tabs.Count;
+        _tabStrip.SelectedIndex = ((_tabStrip.SelectedIndex + direction) % count + count) % count;
+    }
+
+    /// <summary>
+    /// Zoom, in the steps the engine thinks in: a level rather than a
+    /// percentage, where each whole number is a factor of 1.2. Passing nothing
+    /// puts the page back to its own size.
+    /// </summary>
+    private void Zoom(double? step)
+    {
+        ChromiumWebBrowser? browser = Selected;
+        if (browser is null)
+        {
+            return;
+        }
+
+        double current = _zoom.GetValueOrDefault(browser);
+        double level = step is null ? 0 : Math.Clamp(current + step.Value, -4, 6);
+        _zoom[browser] = level;
+        browser.SetZoomLevel(level);
+    }
+
+    private void ShowMenu(Point screen)
+    {
+        ContextMenuStrip menu = new()
+        {
+            Renderer = new MenuRenderer(),
+            BackColor = Theme.Current.Surface,
+            ForeColor = Theme.Current.Text,
+            ShowImageMargin = false,
+            Font = Font,
+        };
+
+        void Item(string text, string keys, Action action) =>
+            menu.Items.Add(new ToolStripMenuItem(text, null, (_, _) => action())
+            {
+                ShortcutKeyDisplayString = keys,
+            });
+
+        Item("New tab", "Ctrl+T", () => OpenTab(HomePage));
+        Item("Close tab", "Ctrl+W", () => CloseTab(_tabStrip.SelectedIndex));
+        menu.Items.Add(new ToolStripSeparator());
+        Item("Zoom in", "Ctrl+Plus", () => Zoom(0.5));
+        Item("Zoom out", "Ctrl+Minus", () => Zoom(-0.5));
+        Item("Reset zoom", "Ctrl+0", () => Zoom(null));
+        menu.Items.Add(new ToolStripSeparator());
+        Item("Print...", "Ctrl+P", () => Selected?.Print());
+        menu.Items.Add(new ToolStripSeparator());
+        Item($"About {Branding.Name}", string.Empty, ShowAbout);
+        Item("Exit", string.Empty, Close);
+
+        menu.Closed += (_, _) => menu.Dispose();
+        menu.Show(screen);
+    }
+
+    private void ShowAbout()
+    {
+        using AboutForm about = new(_profile);
+        about.ShowDialog(this);
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 using System.Reflection;
+using ChromiumBrowser.Browser;
 using ChromiumBrowser.Controls;
 using ChromiumBrowser.Core.Ui;
 
@@ -24,6 +25,7 @@ internal static class Program
 
         CheckTabStrip();
         CheckCaptionButtons();
+        CheckShortcuts();
 
         Console.WriteLine();
         Console.WriteLine($"{_total - _failures}/{_total} user interface checks passed.");
@@ -124,6 +126,33 @@ internal static class Program
         strip.RemoveTab(2);
         Check("strip: closing the last tab selects the one before it",
             strip.Tabs.Count == 2 && strip.SelectedIndex == 1, $"got {strip.SelectedIndex}");
+    }
+
+    private static void CheckShortcuts()
+    {
+        // The page and the window read the same table, so this is the only place
+        // the two can be checked against each other.
+        Check("keys: Ctrl+T opens a tab",
+            ShortcutHandler.Match((int)Keys.T, control: true, shift: false) == BrowserCommand.NewTab);
+        Check("keys: Ctrl+W closes one",
+            ShortcutHandler.Match((int)Keys.W, control: true, shift: false) == BrowserCommand.CloseTab);
+        Check("keys: Ctrl+Tab walks forward and Ctrl+Shift+Tab back",
+            ShortcutHandler.Match((int)Keys.Tab, true, false) == BrowserCommand.NextTab
+            && ShortcutHandler.Match((int)Keys.Tab, true, true) == BrowserCommand.PreviousTab);
+        Check("keys: both plus keys zoom in",
+            ShortcutHandler.Match((int)Keys.Add, true, false) == BrowserCommand.ZoomIn
+            && ShortcutHandler.Match((int)Keys.Oemplus, true, false) == BrowserCommand.ZoomIn);
+        Check("keys: F5 reloads without a modifier",
+            ShortcutHandler.Match((int)Keys.F5, false, false) == BrowserCommand.Reload);
+
+        // Anything this window does not claim has to reach the page untouched,
+        // or copying and finding on a page would quietly stop working.
+        Check("keys: Ctrl+C is left to the page",
+            ShortcutHandler.Match((int)Keys.C, true, false) is null);
+        Check("keys: Ctrl+F is left to the page",
+            ShortcutHandler.Match((int)Keys.F, true, false) is null);
+        Check("keys: a letter on its own is left to the page",
+            ShortcutHandler.Match((int)Keys.T, false, false) is null);
     }
 
     private static void CheckCaptionButtons()

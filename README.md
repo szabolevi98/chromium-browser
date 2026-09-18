@@ -27,7 +27,8 @@ toolbar are drawn rather than assembled from system controls.
       shrink further
 - [x] Back, forward, reload, home, and a bar that takes an address or a search
 - [x] Light and dark, following the system, with the desktop's own accent colour
-- [ ] Favicons, and a menu
+- [x] Favicons on the tabs, a menu, and the keyboard shortcuts a browser is
+      expected to answer, including inside a page that has the focus
 - [ ] Bookmarks, history and downloads
 - [ ] Settings, including the home page and the search engine
 - [ ] Session restore, private windows, find in page
@@ -45,7 +46,7 @@ Needs the .NET 9 SDK.
 ```
 dotnet build ChromiumBrowser.sln
 dotnet run --project tests/ChromiumBrowser.Tests    # 18 offline checks
-dotnet run --project tests/ChromiumBrowser.UiTests  # 14 user interface checks
+dotnet run --project tests/ChromiumBrowser.UiTests  # 22 user interface checks
 ```
 
 The user interface checks drive the controls the way a pointer would, without
