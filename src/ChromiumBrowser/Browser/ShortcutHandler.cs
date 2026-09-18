@@ -20,6 +20,9 @@ public enum BrowserCommand
     ShowDownloads,
     ToggleBookmarksBar,
     ShowSettings,
+    FindInPage,
+    FindNext,
+    FindPrevious,
 }
 
 /// <summary>
@@ -32,7 +35,10 @@ public enum BrowserCommand
 /// feel broken without anyone being able to say why.
 ///
 /// Only the combinations this window claims are swallowed. Everything else —
-/// Ctrl+C, Ctrl+F, the page's own shortcuts — is passed through untouched.
+/// Ctrl+C, Ctrl+A, the page's own shortcuts — is passed through untouched.
+/// Ctrl+F is claimed: a browser's own find bar is expected to answer it, and a
+/// page that wanted the key for its own search is the exception rather than the
+/// rule.
 /// </summary>
 public sealed class ShortcutHandler : IKeyboardHandler
 {
@@ -81,6 +87,9 @@ public sealed class ShortcutHandler : IKeyboardHandler
     public static BrowserCommand? Match(int keyCode, bool control, bool shift) => (Keys)keyCode switch
     {
         Keys.F5 when !control => BrowserCommand.Reload,
+        Keys.F3 when shift => BrowserCommand.FindPrevious,
+        Keys.F3 => BrowserCommand.FindNext,
+        Keys.F when control => BrowserCommand.FindInPage,
         Keys.Tab when control && shift => BrowserCommand.PreviousTab,
         Keys.Tab when control => BrowserCommand.NextTab,
         Keys.T when control => BrowserCommand.NewTab,

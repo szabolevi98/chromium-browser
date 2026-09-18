@@ -30,6 +30,7 @@ internal static class Program
         CheckShortcuts();
         CheckInternalPages();
         CheckBookmarksBar();
+        CheckFindBar();
 
         Console.WriteLine();
         Console.WriteLine($"{_total - _failures}/{_total} user interface checks passed.");
@@ -49,7 +50,7 @@ internal static class Program
         Console.WriteLine($"FAIL  {name}{(detail.Length > 0 ? $" ({detail})" : string.Empty)}");
     }
 
-    private static void Send(Control control, string handler, MouseEventArgs e) =>
+    private static void Send(Control control, string handler, EventArgs e) =>
         typeof(Control)
             .GetMethod(handler, BindingFlags.Instance | BindingFlags.NonPublic)!
             .Invoke(control, [e]);
@@ -155,8 +156,16 @@ internal static class Program
         // or copying and finding on a page would quietly stop working.
         Check("keys: Ctrl+C is left to the page",
             ShortcutHandler.Match((int)Keys.C, true, false) is null);
-        Check("keys: Ctrl+F is left to the page",
-            ShortcutHandler.Match((int)Keys.F, true, false) is null);
+        Check("keys: Ctrl+A is left to the page",
+            ShortcutHandler.Match((int)Keys.A, true, false) is null);
+
+        // Ctrl+F is the one key this window took back off the page, because a
+        // browser's own find bar is what people expect it to open.
+        Check("keys: Ctrl+F opens the find bar",
+            ShortcutHandler.Match((int)Keys.F, true, false) == BrowserCommand.FindInPage);
+        Check("keys: F3 walks the matches, and with Shift walks back",
+            ShortcutHandler.Match((int)Keys.F3, false, false) == BrowserCommand.FindNext
+            && ShortcutHandler.Match((int)Keys.F3, false, true) == BrowserCommand.FindPrevious);
         Check("keys: a letter on its own is left to the page",
             ShortcutHandler.Match((int)Keys.T, false, false) is null);
     }
@@ -287,6 +296,62 @@ internal static class Program
         Check("bar: what does not fit goes behind the chevron",
             hidden is { Count: > 0 } && hidden[^1].Url == "https://levente.net/",
             hidden is null ? "no overflow" : string.Join(", ", hidden.Select(b => b.Title)));
+    }
+
+    private static void CheckFindBar()
+    {
+        using FindBarControl bar = new();
+        bar.Size = new Size(900, 38);
+
+        // The box is a real text box inside the bar, so typing is what the tests
+        // do to it rather than a method added for their benefit.
+        TextBox box = bar.Controls.OfType<TextBox>().First();
+
+        string typed = string.Empty;
+        bar.SearchChanged += (_, text) => typed = text;
+        box.Text = "wiki";
+        Check("find bar: what is typed is what is searched for",
+            typed == "wiki" && bar.SearchText == "wiki", $"got {typed}");
+
+        bool? forward = null;
+        bar.StepRequested += (_, next) => forward = next;
+
+        Send(box, "OnKeyDown", new KeyEventArgs(Keys.Enter));
+        Check("find bar: Enter walks to the next match", forward == true, $"got {forward}");
+
+        Send(box, "OnKeyDown", new KeyEventArgs(Keys.Enter | Keys.Shift));
+        Check("find bar: and with Shift back to the previous one", forward == false, $"got {forward}");
+
+        bool closed = false;
+        bar.CloseRequested += (_, _) => closed = true;
+        Send(box, "OnKeyDown", new KeyEventArgs(Keys.Escape));
+        Check("find bar: Escape closes it without touching the mouse", closed);
+
+        // The three buttons follow the box: previous, next, close. Their places
+        // are the same arithmetic the bar paints from. The bar reads a finished
+        // click rather than the press and the release, so that is what is sent.
+        void ClickBar(int x) =>
+            Send(bar, "OnMouseClick", new MouseEventArgs(MouseButtons.Left, 1, x, 19, 0));
+
+        forward = null;
+        closed = false;
+        ClickBar(bar.ButtonRect(0).X + 14);
+        Check("find bar: the first button is the previous match", forward == false, $"got {forward}");
+
+        ClickBar(bar.ButtonRect(1).X + 14);
+        Check("find bar: the second is the next one", forward == true, $"got {forward}");
+
+        ClickBar(bar.ButtonRect(2).X + 14);
+        Check("find bar: the third closes the bar", closed);
+
+        // Clicking the box itself must not be read as one of the buttons.
+        forward = null;
+        closed = false;
+        ClickBar(20);
+        Check("find bar: clicking in the box does nothing else", forward is null && !closed);
+
+        Check("find bar: it starts hidden, so a window that never searches never shows it",
+            !new FindBarControl().Visible);
     }
 
     private static void CheckCaptionButtons()
