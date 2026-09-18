@@ -1,4 +1,5 @@
 using ChromiumBrowser.Core;
+using ChromiumBrowser.Core.Data;
 using ChromiumBrowser.Core.Profile;
 using ChromiumBrowser.Core.Ui;
 
@@ -99,6 +100,151 @@ void Check(string name, bool passed, string detail = "")
     Check("tabs: a tab dragged off either end lands at that end",
         TabStripLayout.DropIndex(shared, draggedIndex: 3, draggedCentreX: -200) == 0
         && TabStripLayout.DropIndex(shared, draggedIndex: 1, draggedCentreX: 2000) == 4);
+}
+
+// --------------------------------------------------------------------- data
+
+string Scratch()
+{
+    string directory = Path.Combine(Path.GetTempPath(), $"cb-tests-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(directory);
+    return directory;
+}
+
+{
+    string directory = Scratch();
+    string path = Path.Combine(directory, "things.json");
+
+    JsonStore.Save(path, new[] { "one", "two" });
+    Check("store: what is written comes back",
+        JsonStore.Load<string>(path) is ["one", "two"]);
+
+    Check("store: a file that is not there is an empty list",
+        JsonStore.Load<string>(Path.Combine(directory, "missing.json")).Count == 0);
+
+    File.WriteAllText(path, "{ this is not json");
+    Check("store: a damaged file is an empty list rather than a crash",
+        JsonStore.Load<string>(path).Count == 0);
+
+    // The save writes beside the file and then replaces it, so an interrupted
+    // write cannot leave a half-file behind under the real name.
+    JsonStore.Save(path, new[] { "three" });
+    Check("store: saving leaves no working file behind",
+        !File.Exists(path + ".writing") && JsonStore.Load<string>(path) is ["three"]);
+
+    Directory.Delete(directory, true);
+}
+
+{
+    string directory = Scratch();
+    string path = Path.Combine(directory, "bookmarks.json");
+
+    BookmarkStore bookmarks = new(path);
+    bookmarks.Add("https://example.com/", "Example");
+    bookmarks.Add("https://nesdev.org/", "NESdev");
+    Check("bookmarks: kept in the order they were added",
+        bookmarks.All.Select(b => b.Title).ToList() is ["Example", "NESdev"]);
+
+    bookmarks.Add("https://example.com/", "Example Domain");
+    Check("bookmarks: the same address twice renames rather than duplicates",
+        bookmarks.All.Count == 2 && bookmarks.All[0].Title == "Example Domain");
+
+    Check("bookmarks: the star knows whether this page is kept",
+        bookmarks.Contains("https://EXAMPLE.com/") && !bookmarks.Contains("https://other.test/"));
+
+    bookmarks.Move(0, 1);
+    Check("bookmarks: dragging one past the other reorders them",
+        bookmarks.All.Select(b => b.Title).ToList() is ["NESdev", "Example Domain"]);
+
+    Check("bookmarks: the star adds and removes the same page",
+        !bookmarks.Toggle("https://nesdev.org/", "NESdev")
+        && bookmarks.All.Count == 1
+        && bookmarks.Toggle("https://nesdev.org/", "NESdev"));
+
+    BookmarkStore reopened = new(path);
+    Check("bookmarks: they are still there next time",
+        reopened.All.Count == 2 && reopened.Contains("https://nesdev.org/"));
+
+    Directory.Delete(directory, true);
+}
+
+{
+    string directory = Scratch();
+    string path = Path.Combine(directory, "history.json");
+    DateTimeOffset noon = new(2026, 9, 18, 12, 0, 0, TimeSpan.Zero);
+
+    HistoryStore history = new(path);
+    history.Record("https://example.com/", "Example", noon);
+    history.Record("https://nesdev.org/", "NESdev", noon.AddMinutes(1));
+    history.Record("https://example.com/", "Example", noon.AddMinutes(2));
+
+    Check("history: one entry per address, not one per visit",
+        history.All.Count == 2);
+    Check("history: a page visited again rises to the top and is counted",
+        history.All[0].Url == "https://example.com/" && history.All[0].Visits == 2,
+        $"got {history.All[0].Url} visited {history.All[0].Visits}");
+
+    history.Record("https://example.com/", string.Empty, noon.AddMinutes(3));
+    Check("history: a visit with no title does not erase the title it had",
+        history.All[0].Title == "Example");
+
+    history.Record("about:blank", "Nothing", noon.AddMinutes(4));
+    history.Record(string.Empty, "Nothing", noon.AddMinutes(5));
+    Check("history: blank pages are not somewhere you have been",
+        history.All.Count == 2);
+
+    Check("history: searching matches the title and the address, either case",
+        history.Search("NESDEV").Count == 1 && history.Search("example.com").Count == 1);
+
+    history.ClearSince(noon.AddMinutes(2));
+    Check("history: clearing the last while leaves what came before",
+        history.All.Count == 1 && history.All[0].Url == "https://nesdev.org/");
+
+    HistoryStore reopened = new(path);
+    Check("history: it is still there next time", reopened.All.Count == 1);
+    reopened.ClearAll();
+    Check("history: and can be emptied", new HistoryStore(path).All.Count == 0);
+
+    Directory.Delete(directory, true);
+}
+
+{
+    string directory = Scratch();
+    string path = Path.Combine(directory, "downloads.json");
+
+    DownloadStore downloads = new(path);
+    downloads.Begin(1, "https://example.com/file.zip", "file.zip", 1000);
+    downloads.Progressed(1, 400, 1000, Path.Combine(directory, "file.zip"));
+
+    Check("downloads: progress is known but not yet finished",
+        downloads.All[0].ReceivedBytes == 400
+        && downloads.All[0].Progress == 0.4
+        && downloads.All[0].State == DownloadState.InProgress);
+
+    Check("downloads: a size the server did not give means no progress bar",
+        new DownloadRecord { Url = "u", FileName = "f" }.Progress is null);
+
+    downloads.Finish(1, DownloadState.Completed, 1000, Path.Combine(directory, "file.zip"));
+    Check("downloads: finishing records where the file went",
+        downloads.All[0].State == DownloadState.Completed
+        && downloads.All[0].Finished is not null
+        && downloads.All[0].Path.EndsWith("file.zip", StringComparison.Ordinal),
+        $"state {downloads.All[0].State}, path '{downloads.All[0].Path}'");
+
+    // Something still running when the browser closes did not carry on running.
+    downloads.Begin(2, "https://example.com/big.iso", "big.iso", 9000);
+    downloads.Progressed(2, 100, 9000, string.Empty);
+    JsonStore.Save(path, downloads.All);
+
+    DownloadStore reopened = new(path);
+    Check("downloads: one interrupted by closing is not shown as still running",
+        reopened.All.Any(d => d.FileName == "big.iso" && d.State == DownloadState.Interrupted),
+        string.Join(", ", reopened.All.Select(d => $"{d.FileName}:{d.State}")));
+
+    reopened.Clear();
+    Check("downloads: the list can be emptied", new DownloadStore(path).All.Count == 0);
+
+    Directory.Delete(directory, true);
 }
 
 Console.WriteLine();
