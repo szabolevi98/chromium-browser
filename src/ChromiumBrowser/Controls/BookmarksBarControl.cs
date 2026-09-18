@@ -168,7 +168,7 @@ public sealed class BookmarksBarControl : Control
 
         if (_firstHidden >= 0 && e.X >= Width - OverflowWidth && e.Button == MouseButtons.Left)
         {
-            OverflowRequested?.Invoke(this, (new Point(Width - OverflowWidth, Height), Hidden));
+            OverflowRequested?.Invoke(this, (new Point(Width, Height), Hidden));
             return;
         }
 

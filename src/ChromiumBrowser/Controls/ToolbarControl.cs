@@ -249,7 +249,10 @@ public sealed class ToolbarControl : Control
             case 2: ReloadRequested?.Invoke(this, EventArgs.Empty); break;
             case 3: HomeRequested?.Invoke(this, EventArgs.Empty); break;
             case MenuButton:
-                MenuRequested?.Invoke(this, new Point(MenuRect.Left, MenuRect.Bottom));
+                // The top-right corner of the menu that is about to open, which
+                // is the button's own right edge: the menu hangs down and to
+                // the left from there.
+                MenuRequested?.Invoke(this, new Point(MenuRect.Right, MenuRect.Bottom));
                 break;
         }
     }

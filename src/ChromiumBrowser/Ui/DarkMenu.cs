@@ -40,9 +40,14 @@ public static class DarkMenu
     public static void Separator(this ContextMenuStrip menu) => menu.Items.Add(new ToolStripSeparator());
 
     /// <summary>
-    /// Shows the menu under a point on a control, and takes care of throwing it
-    /// away afterwards — once the click has been dispatched, not while it is
-    /// still on its way.
+    /// Shows a menu hanging down and to the left of a point on a control: the
+    /// point is its top-right corner, which is how a menu button at the right
+    /// end of a toolbar has to open. Opening to the right instead pushes it off
+    /// the edge of the window — and, on a machine with a second screen, onto
+    /// that screen.
+    ///
+    /// It also takes care of throwing the menu away afterwards, once the click
+    /// has been dispatched rather than while it is still on its way.
     /// </summary>
     public static void ShowAt(this ContextMenuStrip menu, Control owner, Point at)
     {
@@ -57,6 +62,22 @@ public static class DarkMenu
             owner.BeginInvoke(menu.Dispose);
         };
 
-        menu.Show(owner, at);
+        menu.Show(owner, at, ToolStripDropDownDirection.BelowLeft);
+
+        // Windows Forms keeps a drop-down on the screen its owner is on, but only
+        // by the edge it would cross first. A menu taller than what is left below
+        // the button is moved up; one that would still hang off the bottom of the
+        // screen is pulled back onto it here, because a menu whose last entries
+        // are under the taskbar is a menu missing Exit.
+        Rectangle screen = Screen.FromControl(owner).WorkingArea;
+        Rectangle where = menu.Bounds;
+
+        int x = Math.Clamp(where.X, screen.Left, Math.Max(screen.Left, screen.Right - where.Width));
+        int y = Math.Clamp(where.Y, screen.Top, Math.Max(screen.Top, screen.Bottom - where.Height));
+
+        if (x != where.X || y != where.Y)
+        {
+            menu.Location = new Point(x, y);
+        }
     }
 }
