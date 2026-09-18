@@ -49,6 +49,13 @@ public sealed class BrowserWindow : Form
     private readonly ToolbarControl _toolbar = new();
     private readonly BookmarksBarControl _bookmarksBar = new();
     private readonly FindBarControl _findBar = new();
+
+    /// <summary>
+    /// The one menu this window opens, whichever button opened it. Kept rather
+    /// than built per click, because there is no safe moment to throw a menu
+    /// away while the click that closed it is still being dealt with.
+    /// </summary>
+    private readonly ContextMenuStrip _menu = DarkMenu.Create(new Font("Segoe UI", 9f));
     private readonly Panel _pages = new() { Dock = DockStyle.None };
     private readonly List<ChromiumWebBrowser> _browsers = [];
 
@@ -632,7 +639,7 @@ public sealed class BrowserWindow : Form
 
     private void ShowOverflow(Point at, IReadOnlyList<Bookmark> hidden)
     {
-        ContextMenuStrip menu = DarkMenu.Create(Font);
+        ContextMenuStrip menu = _menu.Reset();
 
         foreach (Bookmark bookmark in hidden)
         {
@@ -797,7 +804,7 @@ public sealed class BrowserWindow : Form
 
     private void ShowMenu(Point at)
     {
-        ContextMenuStrip menu = DarkMenu.Create(Font);
+        ContextMenuStrip menu = _menu.Reset();
 
         void Item(string text, string keys, Action action) => menu.Add(text, keys, action);
 
@@ -1066,6 +1073,9 @@ public sealed class BrowserWindow : Form
         Theme.Changed -= OnThemeChanged;
         _settings.Changed -= OnSettingsChanged;
         base.OnFormClosed(e);
+
+        _menu.Reset();
+        _menu.Dispose();
 
         // A private window's cookies and cache were only ever in memory; letting
         // go of the context is what throws them away.
