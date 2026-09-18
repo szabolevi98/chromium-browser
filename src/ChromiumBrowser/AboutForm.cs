@@ -3,6 +3,7 @@ using CefSharp;
 using ChromiumBrowser.Core;
 using ChromiumBrowser.Core.Profile;
 using ChromiumBrowser.Ui;
+using ChromiumBrowser.Core.Localisation;
 
 namespace ChromiumBrowser;
 
@@ -17,7 +18,7 @@ public sealed class AboutForm : Form
     {
         Palette palette = Theme.Current;
 
-        Text = $"About {Branding.Name}";
+        Text = $"{Strings.Of("about.title")} {Branding.Name}";
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         MaximizeBox = false;
@@ -31,15 +32,15 @@ public sealed class AboutForm : Form
         string version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "2.0.0";
 
         Label name = Line(Branding.Name, 20, new Font("Segoe UI Semibold", 15f), palette.Text);
-        Label tagline = Line(Branding.Tagline, 54, Font, palette.TextMuted);
-        Label build = Line($"Version {version}", 90, Font, palette.Text);
+        Label tagline = Line(Strings.Of("about.tagline"), 54, Font, palette.TextMuted);
+        Label build = Line($"{Strings.Of("about.version")} {version}", 90, Font, palette.Text);
         Label engine = Line($"Chromium {Cef.ChromiumVersion}, CEF {Cef.CefSharpVersion}", 114, Font, palette.TextMuted);
-        Label where = Line(profile.IsPortable ? "Portable: data kept beside the program" : "Data kept in your user profile", 150, Font, palette.Text);
+        Label where = Line(Strings.Of(profile.IsPortable ? "about.portable" : "about.installed"), 150, Font, palette.Text);
         Label path = Line(profile.Path, 174, Font, palette.TextMuted);
 
         Button close = new()
         {
-            Text = "Close",
+            Text = Strings.Of("button.close"),
             DialogResult = DialogResult.OK,
             FlatStyle = FlatStyle.Flat,
             BackColor = palette.Hover,

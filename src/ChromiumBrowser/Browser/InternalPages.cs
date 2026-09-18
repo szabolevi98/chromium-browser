@@ -1,6 +1,6 @@
-using System.Net;
 using System.Text;
 using ChromiumBrowser.Core.Data;
+using ChromiumBrowser.Core.Localisation;
 using ChromiumBrowser.Ui;
 
 namespace ChromiumBrowser.Browser;
@@ -59,7 +59,7 @@ public sealed class InternalPages
             "history" => History(query),
             "downloads" => Downloads(query),
             "settings" => SettingsPage(query),
-            _ => Document("Not found", "<p class=\"empty\">There is no such page.</p>"),
+            _ => Document(Strings.Of("page.notFound"), $"<p class=\"empty\">{Strings.Of("page.notFound")}</p>"),
         };
     }
 
@@ -79,20 +79,18 @@ public sealed class InternalPages
 
         StringBuilder body = new();
         body.Append($"""
-            <h1>History</h1>
+            <h1>{Strings.Of("page.history")}</h1>
             <form class="bar" method="get" action="{Scheme}://history">
-              <input class="search" type="search" name="q" placeholder="Search history"
+              <input class="search" type="search" name="q" placeholder="{Strings.Of("history.search")}"
                      value="{Escape(search)}" autofocus>
-              <a class="button" href="{Scheme}://history?clear=all">Clear all</a>
+              <a class="button" href="{Scheme}://history?clear=all">{Strings.Of("history.clear")}</a>
             </form>
             """);
 
         if (entries.Count == 0)
         {
-            body.Append(search.Length > 0
-                ? "<p class=\"empty\">Nothing matches that.</p>"
-                : "<p class=\"empty\">Nowhere yet. Pages you visit will be listed here.</p>");
-            return Document("History", body.ToString());
+            body.Append($"<p class=\"empty\">{Strings.Of(search.Length > 0 ? "history.noMatch" : "history.empty")}</p>");
+            return Document(Strings.Of("page.history"), body.ToString());
         }
 
         body.Append("<ul class=\"list\">");
@@ -111,13 +109,13 @@ public sealed class InternalPages
                   <span class="time">{entry.LastVisit:HH:mm}</span>
                   <a href="{Escape(entry.Url)}">{Escape(entry.Title)}</a>
                   <span class="host">{Escape(HostOf(entry.Url))}</span>
-                  {(entry.Visits > 1 ? $"<span class=\"count\">{entry.Visits} visits</span>" : string.Empty)}
+                  {(entry.Visits > 1 ? $"<span class=\"count\">{entry.Visits} {Strings.Of("history.visits")}</span>" : string.Empty)}
                 </li>
                 """);
         }
 
         body.Append("</ul>");
-        return Document("History", body.ToString());
+        return Document(Strings.Of("page.history"), body.ToString());
     }
 
     private string Downloads(Dictionary<string, string> query)
@@ -136,16 +134,16 @@ public sealed class InternalPages
 
         StringBuilder body = new();
         body.Append($"""
-            <h1>Downloads</h1>
+            <h1>{Strings.Of("page.downloads")}</h1>
             <div class="bar">
-              <a class="button" href="{Scheme}://downloads?clear=all">Clear finished</a>
+              <a class="button" href="{Scheme}://downloads?clear=all">{Strings.Of("downloads.clear")}</a>
             </div>
             """);
 
         if (records.Count == 0)
         {
-            body.Append("<p class=\"empty\">Nothing downloaded yet.</p>");
-            return Document("Downloads", body.ToString());
+            body.Append($"<p class=\"empty\">{Strings.Of("downloads.empty")}</p>");
+            return Document(Strings.Of("page.downloads"), body.ToString());
         }
 
         body.Append("<ul class=\"list\">");
@@ -155,14 +153,14 @@ public sealed class InternalPages
             {
                 DownloadState.Completed => Size(record.ReceivedBytes),
                 DownloadState.InProgress => record.Progress is { } fraction
-                    ? $"{fraction:P0} of {Size(record.TotalBytes)}"
-                    : $"{Size(record.ReceivedBytes)} so far",
-                DownloadState.Cancelled => "Cancelled",
-                _ => "Interrupted",
+                    ? $"{fraction:P0} {Strings.Of("downloads.of")} {Size(record.TotalBytes)}"
+                    : $"{Size(record.ReceivedBytes)} {Strings.Of("downloads.soFar")}",
+                DownloadState.Cancelled => Strings.Of("downloads.cancelled"),
+                _ => Strings.Of("downloads.interrupted"),
             };
 
             string action = record.Path.Length > 0 && record.State == DownloadState.Completed
-                ? $"<a class=\"link\" href=\"{Scheme}://downloads?reveal={Uri.EscapeDataString(record.Path)}\">Show in folder</a>"
+                ? $"<a class=\"link\" href=\"{Scheme}://downloads?reveal={Uri.EscapeDataString(record.Path)}\">{Strings.Of("downloads.reveal")}</a>"
                 : string.Empty;
 
             body.Append($"""
@@ -176,7 +174,7 @@ public sealed class InternalPages
         }
 
         body.Append("</ul>");
-        return Document("Downloads", body.ToString());
+        return Document(Strings.Of("page.downloads"), body.ToString());
     }
 
     private string SettingsPage(Dictionary<string, string> query)
@@ -198,9 +196,12 @@ public sealed class InternalPages
                     ? theme
                     : current.Theme,
                 ShowBookmarksBar = query.ContainsKey("bar"),
+                Language = query.GetValueOrDefault("language", current.Language),
             });
 
-            saved = "<p class=\"saved\">Saved.</p>";
+            Strings.Use(_settings.Current.Language);
+
+            saved = $"<p class=\"saved\">{Strings.Of("settings.saved")}</p>";
         }
 
         if (query.TryGetValue("forget", out string? what))
@@ -211,7 +212,7 @@ public sealed class InternalPages
                 case "downloads": _downloads.Clear(); break;
             }
 
-            saved = "<p class=\"saved\">Cleared.</p>";
+            saved = $"<p class=\"saved\">{Strings.Of("settings.cleared")}</p>";
         }
 
         Settings settings = _settings.Current;
@@ -223,58 +224,67 @@ public sealed class InternalPages
                 + $"{Escape(engine.Name)}</option>");
         }
 
-        engines.Append($"<option value=\"Custom\"{Selected("Custom", settings.SearchEngine)}>Something else</option>");
+        engines.Append($"<option value=\"Custom\"{Selected("Custom", settings.SearchEngine)}>{Strings.Of("settings.searchOther")}</option>");
 
         string body = $"""
-            <h1>Settings</h1>
+            <h1>{Strings.Of("page.settings")}</h1>
             {saved}
             <form method="get" action="{Scheme}://settings">
               <input type="hidden" name="save" value="1">
 
               <section>
-                <label for="home">Home page</label>
+                <label for="home">{Strings.Of("settings.home")}</label>
                 <input id="home" class="field" type="text" name="home" value="{Escape(settings.HomePage)}">
-                <p class="hint">Where the home button and every new tab go.</p>
+                <p class="hint">{Strings.Of("settings.homeHint")}</p>
               </section>
 
               <section>
-                <label for="engine">Search with</label>
+                <label for="engine">{Strings.Of("settings.search")}</label>
                 <select id="engine" class="field" name="engine">{engines}</select>
                 <input class="field" type="text" name="custom" placeholder="https://example.com/?q={WordsPlaceholder}"
                        value="{Escape(settings.CustomSearchTemplate)}">
-                <p class="hint">Anything typed in the bar that is not an address is searched for.
-                   An address of your own needs {WordsPlaceholder} where the words go.</p>
+                <p class="hint">{string.Format(Strings.Of("settings.searchHint"), WordsPlaceholder)}</p>
               </section>
 
               <section>
-                <label for="theme">Appearance</label>
+                <label for="theme">{Strings.Of("settings.appearance")}</label>
                 <select id="theme" class="field" name="theme">
-                  <option value="System"{Selected("System", settings.Theme.ToString())}>Follow Windows</option>
-                  <option value="Light"{Selected("Light", settings.Theme.ToString())}>Light</option>
-                  <option value="Dark"{Selected("Dark", settings.Theme.ToString())}>Dark</option>
+                  <option value="System"{Selected("System", settings.Theme.ToString())}>{Strings.Of("settings.themeSystem")}</option>
+                  <option value="Light"{Selected("Light", settings.Theme.ToString())}>{Strings.Of("settings.themeLight")}</option>
+                  <option value="Dark"{Selected("Dark", settings.Theme.ToString())}>{Strings.Of("settings.themeDark")}</option>
                 </select>
+                <label for="language" class="after">{Strings.Of("settings.language")}</label>
+                <select id="language" class="field" name="language">
+                  <option value="en"{Selected("en", settings.Language)}>English</option>
+                  <option value="hu"{Selected("hu", settings.Language)}>Magyar</option>
+                </select>
+
                 <label class="tick"><input type="checkbox" name="bar" value="1"
-                  {(settings.ShowBookmarksBar ? "checked" : string.Empty)}> Show the bookmarks bar</label>
+                  {(settings.ShowBookmarksBar ? "checked" : string.Empty)}> {Strings.Of("settings.bar")}</label>
               </section>
 
-              <button class="button primary" type="submit">Save</button>
+              <button class="button primary" type="submit">{Strings.Of("settings.save")}</button>
             </form>
 
             <section>
-              <label>Clear</label>
-              <p class="hint">{Count(_history.All.Count, "page")} in history,
-                 {Count(_bookmarks.All.Count, "bookmark")} kept.</p>
-              <a class="button" href="{Scheme}://settings?forget=history">Clear history</a>
-              <a class="button" href="{Scheme}://settings?forget=downloads">Clear the download list</a>
+              <label>{Strings.Of("settings.clear")}</label>
+              <p class="hint">{Count(_history.All.Count, "settings.page")} {Strings.Of("settings.inHistory")},
+                 {Count(_bookmarks.All.Count, "settings.bookmark")} {Strings.Of("settings.kept")}.</p>
+              <a class="button" href="{Scheme}://settings?forget=history">{Strings.Of("settings.clearHistory")}</a>
+              <a class="button" href="{Scheme}://settings?forget=downloads">{Strings.Of("settings.clearDownloads")}</a>
             </section>
             """;
 
-        return Document("Settings", body);
+        return Document(Strings.Of("page.settings"), body);
     }
 
-    /// <summary>"1 page" rather than "1 pages", which is the sort of thing people notice.</summary>
-    private static string Count(int number, string noun) =>
-        number == 1 ? $"1 {noun}" : $"{number} {noun}s";
+    /// <summary>
+    /// "1 page" rather than "1 pages". English changes the noun and Hungarian
+    /// does not, which is why both plurals are phrases in the table rather than
+    /// an "s" added here.
+    /// </summary>
+    private static string Count(int number, string key) =>
+        $"{number} {Strings.Of(number == 1 ? key + "One" : key + "Many")}";
 
     private static string Selected(string value, string current) =>
         string.Equals(value, current, StringComparison.OrdinalIgnoreCase) ? " selected" : string.Empty;
@@ -360,6 +370,7 @@ public sealed class InternalPages
               .field:focus { border-color: var(--accent); }
               .hint { color: var(--muted); margin: 6px 0 0; font-size: 13px; max-width: 520px; }
               .tick { font-weight: 400; display: flex; gap: 8px; align-items: center; margin-top: 12px; }
+              .after { margin-top: 18px; }
               .tick input { accent-color: var(--accent); }
               button.button { cursor: pointer; font: inherit; }
               .primary { border-color: var(--accent); }
@@ -387,7 +398,7 @@ public sealed class InternalPages
 
     private static string Size(long bytes) => bytes switch
     {
-        <= 0 => "unknown size",
+        <= 0 => Strings.Of("downloads.unknownSize"),
         < 1024 => $"{bytes} B",
         < 1024 * 1024 => $"{bytes / 1024.0:0.#} KB",
         < 1024 * 1024 * 1024 => $"{bytes / (1024.0 * 1024):0.#} MB",
@@ -398,8 +409,18 @@ public sealed class InternalPages
     /// Titles come from web pages, so every one of them reaches the page through
     /// this. A page called <c>&lt;script&gt;</c> is a page somebody made to see
     /// whether anyone was paying attention.
+    ///
+    /// Only the five characters that can change what the markup means are
+    /// touched. The framework's own encoder also turns every accented letter
+    /// into a numeric entity, which is unnecessary in a page that says it is
+    /// UTF-8 and turns "Beállítások" into something unreadable in the source.
     /// </summary>
-    private static string Escape(string text) => WebUtility.HtmlEncode(text);
+    private static string Escape(string text) => text
+        .Replace("&", "&amp;", StringComparison.Ordinal)
+        .Replace("<", "&lt;", StringComparison.Ordinal)
+        .Replace(">", "&gt;", StringComparison.Ordinal)
+        .Replace("\"", "&quot;", StringComparison.Ordinal)
+        .Replace("'", "&#39;", StringComparison.Ordinal);
 
     private static Dictionary<string, string> ParseQuery(string query)
     {

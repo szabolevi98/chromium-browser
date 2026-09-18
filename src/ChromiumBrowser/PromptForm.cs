@@ -1,4 +1,5 @@
 using ChromiumBrowser.Ui;
+using ChromiumBrowser.Core.Localisation;
 
 namespace ChromiumBrowser;
 
@@ -43,8 +44,8 @@ public sealed class PromptForm : Form
         _input.BackColor = palette.Surface;
         _input.ForeColor = palette.Text;
 
-        Button ok = Action("OK", DialogResult.OK, ClientSize.Width - 200);
-        Button cancel = Action("Cancel", DialogResult.Cancel, ClientSize.Width - 100);
+        Button ok = Action(Strings.Of("button.ok"), DialogResult.OK, ClientSize.Width - 200);
+        Button cancel = Action(Strings.Of("button.cancel"), DialogResult.Cancel, ClientSize.Width - 100);
 
         Controls.AddRange([label, _input, ok, cancel]);
         AcceptButton = ok;
