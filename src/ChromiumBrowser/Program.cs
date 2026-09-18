@@ -42,6 +42,7 @@ internal static class Program
         HistoryStore history = new(Path.Combine(profile.Path, "history.json"));
         DownloadStore downloads = new(Path.Combine(profile.Path, "downloads.json"));
         SettingsStore settings = new(Path.Combine(profile.Path, "settings.json"));
+        SessionStore session = new(Path.Combine(profile.Path, "session.json"));
 
         Strings.Use(settings.Current.Language);
 
@@ -49,10 +50,10 @@ internal static class Program
         // or it would come up in the system's colours and change under the user.
         Theme.Choose(settings.Current.Theme);
 
-        BrowserSession session = new(profile, bookmarks, history, downloads, settings);
-        InternalPages pages = new(history, downloads, settings, bookmarks, BrowserWindow.RevealFile);
-        InternalSchemeFactory internalPages = new(() => session.AnyWindow, pages);
-        session.InternalPages = internalPages;
+        BrowserSession windows = new(profile, bookmarks, history, downloads, settings, session);
+        InternalPages pages = new(history, downloads, settings, bookmarks, session, BrowserWindow.RevealFile);
+        InternalSchemeFactory internalPages = new(() => windows.AnyWindow, pages);
+        windows.InternalPages = internalPages;
 
         CefSettings cefSettings = new()
         {
@@ -91,16 +92,21 @@ internal static class Program
             return 1;
         }
 
-        BrowserWindow first = session.Open(startUrl, wantsPrivate);
+        // What was open comes back first, so an address from the command line
+        // opens as another tab in it rather than instead of it.
+        bool restored = startUrl is null && !wantsPrivate && windows.Restore();
+        BrowserWindow first = restored
+            ? windows.Newest!
+            : windows.Open(startUrl, wantsPrivate);
 
         SingleInstance.Listen(profile.Path, url => first.BeginInvoke(() =>
         {
             // The newest window rather than the first: it is the one in front,
             // and the one a person handing over an address is looking for.
-            (session.Newest ?? first).Accept(url);
+            (windows.Newest ?? first).Accept(url);
         }));
 
-        Application.Run(session);
+        Application.Run(windows);
 
         // After the last window, not after the first: the engine is shared by
         // all of them, and shutting it down while another is still open takes

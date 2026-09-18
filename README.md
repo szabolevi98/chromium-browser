@@ -50,7 +50,11 @@ toolbar are drawn rather than assembled from system controls.
 - [x] One copy per set of data: a second launch hands its address to the
       browser already running rather than starting a rival over the same
       files, while a copy on a memory stick stays a browser of its own
-- [ ] Session restore
+- [x] Session restore: the windows and tabs that were open come back, with
+      the one that was in front still in front, written as things change so
+      that a browser that was killed rather than closed still has them
+- [x] An icon of its own: a window with a tab, drawn by a script in `tools/`
+      at every size Windows asks for rather than one shrunk on the fly
 
 ## What 2.0 has to do at least
 
@@ -64,8 +68,8 @@ Needs the .NET 9 SDK.
 
 ```
 dotnet build ChromiumBrowser.sln
-dotnet run --project tests/ChromiumBrowser.Tests    # 76 offline checks
-dotnet run --project tests/ChromiumBrowser.UiTests  # 65 user interface checks
+dotnet run --project tests/ChromiumBrowser.Tests    # 85 offline checks
+dotnet run --project tests/ChromiumBrowser.UiTests  # 69 user interface checks
 ```
 
 The user interface checks drive the controls the way a pointer would, without

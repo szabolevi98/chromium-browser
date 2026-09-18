@@ -187,7 +187,8 @@ internal static class Program
         DownloadStore downloads = new(Path.Combine(directory, "downloads.json"));
         SettingsStore settings = new(Path.Combine(directory, "settings.json"));
         BookmarkStore bookmarks = new(Path.Combine(directory, "bookmarks.json"));
-        InternalPages pages = new(history, downloads, settings, bookmarks, _ => { });
+        SessionStore session = new(Path.Combine(directory, "session.json"));
+        InternalPages pages = new(history, downloads, settings, bookmarks, session, _ => { });
 
         DateTimeOffset now = DateTimeOffset.Now;
         history.Record("https://example.com/", "Example Domain", now);
@@ -239,6 +240,18 @@ internal static class Program
         Check("pages: an unticked box is heard as off", !settings.Current.ShowBookmarksBar);
         pages.Render(new Uri("browser://settings?save=1&bar=1"));
         Check("pages: and a ticked one as on", settings.Current.ShowBookmarksBar);
+
+        // The same rule decides whether the browser comes back to what was open.
+        Check("pages: the settings offer to bring back what was open",
+            pages.Render(new Uri("browser://settings")).Contains("were open last time", StringComparison.Ordinal));
+        pages.Render(new Uri("browser://settings?save=1"));
+        Check("pages: unticking it is heard", !settings.Current.RestoreSession);
+        pages.Render(new Uri("browser://settings?save=1&restore=1"));
+        Check("pages: and ticking it again is too", settings.Current.RestoreSession);
+
+        session.Save([new SavedWindow { Tabs = [new SavedTab { Url = "https://example.com/" }] }]);
+        pages.Render(new Uri("browser://settings?forget=session"));
+        Check("pages: and it can forget what was open", !session.HasSomething);
 
         history.Record("https://example.com/", "Example", DateTimeOffset.Now);
         pages.Render(new Uri("browser://settings?forget=history"));
@@ -439,6 +452,7 @@ internal static class Program
             new DownloadStore(Path.Combine(directory, "downloads.json")),
             new SettingsStore(Path.Combine(directory, "settings.json")),
             new BookmarkStore(Path.Combine(directory, "bookmarks.json")),
+            new SessionStore(Path.Combine(directory, "session.json")),
             _ => { });
 
         string page = pages.Render(new Uri("browser://private"));

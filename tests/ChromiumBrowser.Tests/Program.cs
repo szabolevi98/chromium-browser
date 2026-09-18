@@ -329,6 +329,62 @@ string Scratch()
     Directory.Delete(directory, true);
 }
 
+// ------------------------------------------------------------------ session
+
+{
+    string directory = Scratch();
+    string path = Path.Combine(directory, "session.json");
+
+    SessionStore session = new(path);
+    Check("session: a browser that has never run has nothing to come back to",
+        !session.HasSomething);
+
+    session.Save(
+    [
+        new SavedWindow
+        {
+            Tabs =
+            [
+                new SavedTab { Url = "https://example.com/", Title = "Example" },
+                new SavedTab { Url = "https://nesdev.org/", Title = "NESdev" },
+            ],
+            Selected = 1,
+            X = 120, Y = 80, Width = 1200, Height = 800,
+        },
+    ]);
+
+    SessionStore again = new(path);
+    Check("session: the tabs come back in the order they were in",
+        again.Windows.Count == 1
+        && again.Windows[0].Tabs.Select(tab => tab.Url).ToList() is
+           ["https://example.com/", "https://nesdev.org/"]);
+    Check("session: with the titles they had, so the strip is readable before they load",
+        again.Windows[0].Tabs[1].Title == "NESdev");
+    Check("session: and the one that was in front is still in front",
+        again.Windows[0].Selected == 1);
+    Check("session: the window comes back where it was",
+        again.Windows[0] is { X: 120, Y: 80, Width: 1200, Height: 800 });
+
+    // The moment between the last window closing and the program ending would
+    // otherwise write an empty list over a perfectly good one.
+    session.Save([]);
+    Check("session: closing everything does not erase what was open",
+        new SessionStore(path).Windows.Count == 1);
+
+    session.Save([new SavedWindow { Tabs = [] }]);
+    Check("session: nor does a window with nothing in it",
+        new SessionStore(path).Windows.Count == 1);
+
+    session.Clear();
+    Check("session: but asking it to forget does", !new SessionStore(path).HasSomething);
+
+    File.WriteAllText(path, "not a session at all");
+    Check("session: a damaged file is nothing to restore rather than a crash",
+        !new SessionStore(path).HasSomething);
+
+    Directory.Delete(directory, true);
+}
+
 // ------------------------------------------------------- what a private window keeps
 
 {

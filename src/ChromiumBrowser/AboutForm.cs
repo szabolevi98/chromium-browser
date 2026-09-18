@@ -19,6 +19,7 @@ public sealed class AboutForm : Form
         Palette palette = Theme.Current;
 
         Text = $"{Strings.Of("about.title")} {Branding.Name}";
+        Icon = BrowserWindow.AppIcon();
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         MaximizeBox = false;

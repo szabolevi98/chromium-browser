@@ -24,7 +24,16 @@ internal sealed class BrowserSession : ApplicationContext
     private readonly HistoryStore _history;
     private readonly DownloadStore _downloads;
     private readonly SettingsStore _settings;
+    private readonly SessionStore _session;
     private readonly List<BrowserWindow> _windows = [];
+
+    /// <summary>
+    /// Writes the session a moment after the last change rather than on every
+    /// one. A page loading fires several address changes in a row, and a window
+    /// being dragged fires a great many: without this the file would be
+    /// rewritten dozens of times for one action.
+    /// </summary>
+    private readonly System.Windows.Forms.Timer _saveSoon = new() { Interval = 1000 };
 
     /// <summary>
     /// Answers <c>browser://</c> addresses. Held because a private window
@@ -38,13 +47,21 @@ internal sealed class BrowserSession : ApplicationContext
         BookmarkStore bookmarks,
         HistoryStore history,
         DownloadStore downloads,
-        SettingsStore settings)
+        SettingsStore settings,
+        SessionStore session)
     {
+        _session = session;
         _profile = profile;
         _bookmarks = bookmarks;
         _history = history;
         _downloads = downloads;
         _settings = settings;
+
+        _saveSoon.Tick += (_, _) =>
+        {
+            _saveSoon.Stop();
+            SaveSession();
+        };
     }
 
     /// <summary>Set once, before the first window, by the code that registers the scheme.</summary>
@@ -66,7 +83,7 @@ internal sealed class BrowserSession : ApplicationContext
     /// <summary>The window opened most recently, which is where a handed-over address goes.</summary>
     public BrowserWindow? Newest => _windows.Count > 0 ? _windows[^1] : null;
 
-    public BrowserWindow Open(string? url, bool isPrivate)
+    public BrowserWindow Open(string? url, bool isPrivate, SavedWindow? restore = null)
     {
         BrowserWindow window = new(
             _profile,
@@ -77,13 +94,30 @@ internal sealed class BrowserSession : ApplicationContext
             url,
             isPrivate,
             (address, secret) => Open(address, secret),
-            _internalPages!);
+            _internalPages!,
+            restore);
 
         _windows.Add(window);
+
+        // A private window is not part of what comes back, so it does not ask
+        // for the session to be written either.
+        if (!window.IsPrivate)
+        {
+            window.ContentsChanged += (_, _) => SaveLater();
+            window.ResizeEnd += (_, _) => SaveLater();
+        }
 
         window.FormClosed += (_, _) =>
         {
             _windows.Remove(window);
+
+            // Written while the window is still in hand rather than after it has
+            // gone: the last window closing is exactly the moment worth keeping,
+            // and by the time the program is ending there is nothing left to ask.
+            if (!window.IsPrivate)
+            {
+                SaveSession(closing: window);
+            }
 
             if (_windows.Count == 0)
             {
@@ -92,6 +126,53 @@ internal sealed class BrowserSession : ApplicationContext
         };
 
         window.Show();
+        SaveLater();
         return window;
+    }
+
+    /// <summary>
+    /// Opens what a previous run left, and says whether there was anything. The
+    /// windows come back in the order they were opened, so the one that was
+    /// first is first again.
+    /// </summary>
+    public bool Restore()
+    {
+        if (!_settings.Current.RestoreSession || !_session.HasSomething)
+        {
+            return false;
+        }
+
+        foreach (SavedWindow saved in _session.Windows.Where(window => window.Tabs.Count > 0))
+        {
+            Open(null, isPrivate: false, saved);
+        }
+
+        return _windows.Count > 0;
+    }
+
+    private void SaveLater()
+    {
+        _saveSoon.Stop();
+        _saveSoon.Start();
+    }
+
+    /// <summary>
+    /// Writes what is open. A window that is closing is asked for its tabs
+    /// before it has let go of them, but is not itself part of what comes back.
+    /// </summary>
+    private void SaveSession(BrowserWindow? closing = null)
+    {
+        List<SavedWindow> open = [.. _windows
+            .Where(window => !window.IsPrivate && !window.IsDisposed)
+            .Select(window => window.Snapshot())];
+
+        // Closing the last window is what leaves the browser with something to
+        // come back to; closing one of several leaves the others.
+        if (closing is not null && open.Count == 0)
+        {
+            open.Add(closing.Snapshot());
+        }
+
+        _session.Save(open);
     }
 }

@@ -32,6 +32,7 @@
     <Product>Chromium Browser</Product>
     <Company>szabolevi98</Company>
     <Copyright>Copyright (c) 2026 szabolevi98</Copyright>
+    <ApplicationIcon>Resources\app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -40,6 +41,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ChromiumBrowser.Core\ChromiumBrowser.Core.csproj" />
+    <!-- The same icon again, as a resource: the one in the executable's header
+         is what Explorer draws, and this is what the windows are given. -->
+    <EmbeddedResource Include="Resources\app.ico" LogicalName="ChromiumBrowser.app.ico" />
   </ItemGroup>
 
 </Project>
