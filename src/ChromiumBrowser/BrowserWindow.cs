@@ -49,12 +49,17 @@ public sealed class BrowserWindow : Form
     private readonly HistoryStore _history;
     private readonly DownloadStore _downloads;
 
-    public BrowserWindow(ProfileLocation profile, string? startUrl)
+    public BrowserWindow(
+        ProfileLocation profile,
+        BookmarkStore bookmarks,
+        HistoryStore history,
+        DownloadStore downloads,
+        string? startUrl)
     {
         _profile = profile;
-        _bookmarks = new BookmarkStore(Path.Combine(profile.Path, "bookmarks.json"));
-        _history = new HistoryStore(Path.Combine(profile.Path, "history.json"));
-        _downloads = new DownloadStore(Path.Combine(profile.Path, "downloads.json"));
+        _bookmarks = bookmarks;
+        _history = history;
+        _downloads = downloads;
 
         Text = Branding.Name;
         MinimumSize = new Size(560, 380);
@@ -298,6 +303,8 @@ public sealed class BrowserWindow : Form
             case BrowserCommand.ZoomOut: Zoom(-0.5); break;
             case BrowserCommand.ZoomReset: Zoom(null); break;
             case BrowserCommand.BookmarkPage: ToggleBookmark(); break;
+            case BrowserCommand.ShowHistory: OpenTab($"{InternalPages.Scheme}://history"); break;
+            case BrowserCommand.ShowDownloads: OpenTab($"{InternalPages.Scheme}://downloads"); break;
         }
     }
 
@@ -374,8 +381,8 @@ public sealed class BrowserWindow : Form
         bool kept = here is not null && _bookmarks.Contains(here);
         Item(kept ? "Remove bookmark" : "Bookmark this page", "Ctrl+D", ToggleBookmark);
         menu.Items.Add(Submenu("Bookmarks", _bookmarks.All.Select(b => (b.Title, b.Url))));
-        menu.Items.Add(Submenu("History", _history.All.Take(12).Select(h => (h.Title, h.Url))));
-        menu.Items.Add(DownloadsMenu());
+        Item("History", "Ctrl+H", () => OpenTab($"{InternalPages.Scheme}://history"));
+        Item("Downloads", "Ctrl+J", () => OpenTab($"{InternalPages.Scheme}://downloads"));
         menu.Items.Add(new ToolStripSeparator());
         Item("Zoom in", "Ctrl+Plus", () => Zoom(0.5));
         Item("Zoom out", "Ctrl+Minus", () => Zoom(-0.5));
@@ -413,46 +420,7 @@ public sealed class BrowserWindow : Form
         return parent;
     }
 
-    /// <summary>
-    /// Downloads, each showing where it got to. Picking one opens the folder it
-    /// is in with the file selected, which is what a download list is for.
-    /// </summary>
-    private ToolStripMenuItem DownloadsMenu()
-    {
-        ToolStripMenuItem parent = new("Downloads");
-
-        foreach (DownloadRecord download in _downloads.All.Take(12))
-        {
-            string state = download.State switch
-            {
-                DownloadState.Completed => string.Empty,
-                DownloadState.InProgress => download.Progress is { } fraction
-                    ? $"  -  {fraction:P0}"
-                    : "  -  downloading",
-                _ => $"  -  {download.State.ToString().ToLowerInvariant()}",
-            };
-
-            parent.DropDownItems.Add(new ToolStripMenuItem(
-                download.FileName + state,
-                null,
-                (_, _) => RevealFile(download.Path))
-            {
-                Enabled = download.Path.Length > 0,
-            });
-        }
-
-        if (parent.DropDownItems.Count == 0)
-        {
-            parent.DropDownItems.Add(new ToolStripMenuItem("Nothing yet") { Enabled = false });
-        }
-
-        parent.DropDown.Renderer = new MenuRenderer();
-        parent.DropDown.BackColor = Theme.Current.Surface;
-        parent.DropDown.ForeColor = Theme.Current.Text;
-        return parent;
-    }
-
-    private static void RevealFile(string path)
+    internal static void RevealFile(string path)
     {
         if (!File.Exists(path))
         {
@@ -482,7 +450,8 @@ public sealed class BrowserWindow : Form
     {
         if (typed.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
             || typed.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
-            || typed.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+            || typed.StartsWith("file://", StringComparison.OrdinalIgnoreCase)
+            || typed.StartsWith($"{InternalPages.Scheme}://", StringComparison.OrdinalIgnoreCase))
         {
             return typed;
         }

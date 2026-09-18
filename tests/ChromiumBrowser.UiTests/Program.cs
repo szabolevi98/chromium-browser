@@ -1,6 +1,7 @@
 using System.Reflection;
 using ChromiumBrowser.Browser;
 using ChromiumBrowser.Controls;
+using ChromiumBrowser.Core.Data;
 using ChromiumBrowser.Core.Ui;
 
 namespace ChromiumBrowser.UiTests;
@@ -26,6 +27,7 @@ internal static class Program
         CheckTabStrip();
         CheckCaptionButtons();
         CheckShortcuts();
+        CheckInternalPages();
 
         Console.WriteLine();
         Console.WriteLine($"{_total - _failures}/{_total} user interface checks passed.");
@@ -155,6 +157,54 @@ internal static class Program
             ShortcutHandler.Match((int)Keys.F, true, false) is null);
         Check("keys: a letter on its own is left to the page",
             ShortcutHandler.Match((int)Keys.T, false, false) is null);
+    }
+
+    private static void CheckInternalPages()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), $"cb-pages-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+
+        HistoryStore history = new(Path.Combine(directory, "history.json"));
+        DownloadStore downloads = new(Path.Combine(directory, "downloads.json"));
+        InternalPages pages = new(history, downloads, _ => { });
+
+        DateTimeOffset now = DateTimeOffset.Now;
+        history.Record("https://example.com/", "Example Domain", now);
+        history.Record("https://nesdev.org/", "NESdev Wiki", now.AddMinutes(-5));
+
+        string listed = pages.Render(new Uri("browser://history"));
+        Check("pages: history lists what was visited",
+            listed.Contains("Example Domain", StringComparison.Ordinal)
+            && listed.Contains("NESdev Wiki", StringComparison.Ordinal));
+        Check("pages: history groups by day", listed.Contains("Today", StringComparison.Ordinal));
+
+        string searched = pages.Render(new Uri("browser://history?q=nesdev"));
+        Check("pages: the search box filters the list",
+            searched.Contains("NESdev Wiki", StringComparison.Ordinal)
+            && !searched.Contains("Example Domain", StringComparison.Ordinal));
+
+        // A page title comes from a web page, so it must never reach the page
+        // this program draws as anything but text.
+        history.Record("https://evil.test/", "<script>alert(1)</script>", now);
+        string escaped = pages.Render(new Uri("browser://history"));
+        Check("pages: a title from a web page cannot bring markup with it",
+            !escaped.Contains("<script>alert", StringComparison.Ordinal)
+            && escaped.Contains("&lt;script&gt;", StringComparison.Ordinal));
+
+        string cleared = pages.Render(new Uri("browser://history?clear=all"));
+        Check("pages: clearing empties the list and says so",
+            history.All.Count == 0 && cleared.Contains("Nowhere yet", StringComparison.Ordinal));
+
+        downloads.Begin(7, "https://example.com/file.zip", "file.zip", 2048);
+        string shown = pages.Render(new Uri("browser://downloads"));
+        Check("pages: downloads are listed with where they came from",
+            shown.Contains("file.zip", StringComparison.Ordinal)
+            && shown.Contains("example.com", StringComparison.Ordinal));
+
+        Check("pages: an address with no page behind it says so",
+            pages.Render(new Uri("browser://nowhere")).Contains("no such page", StringComparison.Ordinal));
+
+        Directory.Delete(directory, true);
     }
 
     private static void CheckCaptionButtons()
