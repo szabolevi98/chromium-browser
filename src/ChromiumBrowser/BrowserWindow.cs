@@ -135,7 +135,7 @@ public sealed class BrowserWindow : Form
                 Selected?.LoadUrl(url);
             }
         };
-        _toolbar.MenuRequested += (_, at) => ShowMenu(_toolbar.PointToScreen(at));
+        _toolbar.MenuRequested += (_, at) => ShowMenu(at);
 
         _bookmarksBar.IconFor = BookmarkIcon;
         _bookmarksBar.Requested += (_, asked) => DoWithBookmark(asked.Bookmark, asked.Action);
@@ -632,25 +632,15 @@ public sealed class BrowserWindow : Form
 
     private void ShowOverflow(Point at, IReadOnlyList<Bookmark> hidden)
     {
-        ContextMenuStrip menu = new()
-        {
-            Renderer = new MenuRenderer(),
-            BackColor = Theme.Current.Surface,
-            ForeColor = Theme.Current.Text,
-            ShowImageMargin = false,
-            Font = Font,
-        };
+        ContextMenuStrip menu = DarkMenu.Create(Font);
 
         foreach (Bookmark bookmark in hidden)
         {
-            menu.Items.Add(new ToolStripMenuItem(
-                string.IsNullOrWhiteSpace(bookmark.Title) ? bookmark.Url : bookmark.Title,
-                null,
-                (_, _) => Selected?.LoadUrl(bookmark.Url)));
+            string title = string.IsNullOrWhiteSpace(bookmark.Title) ? bookmark.Url : bookmark.Title;
+            menu.Add(title, string.Empty, () => Selected?.LoadUrl(bookmark.Url));
         }
 
-        menu.Closed += (_, _) => menu.Dispose();
-        menu.Show(_bookmarksBar, at);
+        menu.ShowAt(_bookmarksBar, at);
     }
 
     /// <summary>
@@ -805,28 +795,17 @@ public sealed class BrowserWindow : Form
         browser.GetBrowser().GetHost().SetFocus(mine);
     }
 
-    private void ShowMenu(Point screen)
+    private void ShowMenu(Point at)
     {
-        ContextMenuStrip menu = new()
-        {
-            Renderer = new MenuRenderer(),
-            BackColor = Theme.Current.Surface,
-            ForeColor = Theme.Current.Text,
-            ShowImageMargin = false,
-            Font = Font,
-        };
+        ContextMenuStrip menu = DarkMenu.Create(Font);
 
-        void Item(string text, string keys, Action action) =>
-            menu.Items.Add(new ToolStripMenuItem(text, null, (_, _) => action())
-            {
-                ShortcutKeyDisplayString = keys,
-            });
+        void Item(string text, string keys, Action action) => menu.Add(text, keys, action);
 
         Item(Strings.Of("menu.newTab"), "Ctrl+T", () => OpenTab(NewTabPage));
         Item(Strings.Of("menu.newWindow"), "Ctrl+N", () => _openWindow(null, false));
         Item(Strings.Of("menu.newPrivateWindow"), "Ctrl+Shift+N", () => _openWindow(null, true));
         Item(Strings.Of("menu.closeTab"), "Ctrl+W", () => CloseTab(_tabStrip.SelectedIndex));
-        menu.Items.Add(new ToolStripSeparator());
+        menu.Separator();
 
         string? here = Selected?.Address;
         bool kept = here is not null && _bookmarks.Contains(here);
@@ -834,21 +813,20 @@ public sealed class BrowserWindow : Form
         menu.Items.Add(Submenu(Strings.Of("menu.bookmarks"), _bookmarks.All.Select(b => (b.Title, b.Url))));
         Item(Strings.Of("menu.history"), "Ctrl+H", () => OpenTab($"{InternalPages.Scheme}://history"));
         Item(Strings.Of("menu.downloads"), "Ctrl+J", () => OpenTab($"{InternalPages.Scheme}://downloads"));
-        menu.Items.Add(new ToolStripSeparator());
+        menu.Separator();
         Item(Strings.Of("menu.find"), "Ctrl+F", OpenFind);
         Item(Strings.Of("menu.zoomIn"), "Ctrl+Plus", () => Zoom(0.5));
         Item(Strings.Of("menu.zoomOut"), "Ctrl+Minus", () => Zoom(-0.5));
         Item(Strings.Of("menu.zoomReset"), "Ctrl+0", () => Zoom(null));
-        menu.Items.Add(new ToolStripSeparator());
+        menu.Separator();
         Item(Strings.Of("menu.print"), "Ctrl+P", () => Selected?.Print());
-        menu.Items.Add(new ToolStripSeparator());
+        menu.Separator();
         Item(Strings.Of("menu.settings"), string.Empty, () => OpenTab($"{InternalPages.Scheme}://settings"));
-        menu.Items.Add(new ToolStripSeparator());
+        menu.Separator();
         Item($"{Strings.Of("menu.about")} {Branding.Name}", string.Empty, ShowAbout);
         Item(Strings.Of("menu.exit"), string.Empty, Close);
 
-        menu.Closed += (_, _) => menu.Dispose();
-        menu.Show(screen);
+        menu.ShowAt(_toolbar, at);
     }
 
     /// <summary>A list of pages that open when picked, or a note that there are none.</summary>
