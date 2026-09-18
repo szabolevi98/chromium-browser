@@ -28,6 +28,8 @@ public sealed class BrowserWindow : Form
 
     private const int ToolbarHeight = 44;
 
+    private const int BookmarksBarHeight = 34;
+
     /// <summary>
     /// A sliver of window above the tabs. It exists so the top edge can still be
     /// grabbed to resize: every pixel covered by a child control belongs to that
@@ -39,6 +41,7 @@ public sealed class BrowserWindow : Form
     private readonly TabStripControl _tabStrip = new();
     private readonly CaptionButtons _captionButtons = new();
     private readonly ToolbarControl _toolbar = new();
+    private readonly BookmarksBarControl _bookmarksBar = new();
     private readonly Panel _pages = new() { Dock = DockStyle.None };
     private readonly List<ChromiumWebBrowser> _browsers = [];
 
@@ -46,6 +49,11 @@ public sealed class BrowserWindow : Form
     private readonly Dictionary<ChromiumWebBrowser, double> _zoom = [];
 
     private readonly BookmarkStore _bookmarks;
+
+    /// <summary>Icons for the bookmarks bar, guessed from each site's root.</summary>
+    private readonly Dictionary<string, Image?> _bookmarkIcons = new(StringComparer.OrdinalIgnoreCase);
+
+    private bool _showBookmarksBar = true;
     private readonly HistoryStore _history;
     private readonly DownloadStore _downloads;
 
@@ -87,7 +95,13 @@ public sealed class BrowserWindow : Form
         _toolbar.Navigated += (_, typed) => Selected?.LoadUrl(AsUrl(typed));
         _toolbar.MenuRequested += (_, at) => ShowMenu(_toolbar.PointToScreen(at));
 
+        _bookmarksBar.IconFor = BookmarkIcon;
+        _bookmarksBar.Requested += (_, asked) => DoWithBookmark(asked.Bookmark, asked.Action);
+        _bookmarksBar.OverflowRequested += (_, overflow) => ShowOverflow(overflow.At, overflow.Hidden);
+        _bookmarksBar.Show(_bookmarks.All);
+
         Controls.Add(_pages);
+        Controls.Add(_bookmarksBar);
         Controls.Add(_toolbar);
         Controls.Add(_tabStrip);
         Controls.Add(_captionButtons);
@@ -303,6 +317,10 @@ public sealed class BrowserWindow : Form
             case BrowserCommand.ZoomOut: Zoom(-0.5); break;
             case BrowserCommand.ZoomReset: Zoom(null); break;
             case BrowserCommand.BookmarkPage: ToggleBookmark(); break;
+            case BrowserCommand.ToggleBookmarksBar:
+                _showBookmarksBar = !_showBookmarksBar;
+                PerformLayout();
+                break;
             case BrowserCommand.ShowHistory: OpenTab($"{InternalPages.Scheme}://history"); break;
             case BrowserCommand.ShowDownloads: OpenTab($"{InternalPages.Scheme}://downloads"); break;
         }
@@ -324,6 +342,103 @@ public sealed class BrowserWindow : Form
         }
 
         _bookmarks.Toggle(url, TitleOf(browser));
+        RefreshBookmarks();
+    }
+
+    private void RefreshBookmarks()
+    {
+        _bookmarksBar.Show(_bookmarks.All);
+        PerformLayout();
+        _bookmarksBar.Invalidate();
+    }
+
+    private void DoWithBookmark(Bookmark bookmark, BookmarkAction action)
+    {
+        switch (action)
+        {
+            case BookmarkAction.Open:
+                Selected?.LoadUrl(bookmark.Url);
+                break;
+
+            case BookmarkAction.OpenInNewTab:
+                OpenTab(bookmark.Url);
+                break;
+
+            case BookmarkAction.Remove:
+                _bookmarks.Remove(bookmark.Url);
+                RefreshBookmarks();
+                break;
+
+            case BookmarkAction.Rename:
+                using (PromptForm prompt = new("Rename bookmark", "Name", bookmark.Title))
+                {
+                    if (prompt.ShowDialog(this) == DialogResult.OK && prompt.Value.Length > 0)
+                    {
+                        _bookmarks.Rename(bookmark.Url, prompt.Value);
+                        RefreshBookmarks();
+                    }
+                }
+
+                break;
+        }
+    }
+
+    private void ShowOverflow(Point at, IReadOnlyList<Bookmark> hidden)
+    {
+        ContextMenuStrip menu = new()
+        {
+            Renderer = new MenuRenderer(),
+            BackColor = Theme.Current.Surface,
+            ForeColor = Theme.Current.Text,
+            ShowImageMargin = false,
+            Font = Font,
+        };
+
+        foreach (Bookmark bookmark in hidden)
+        {
+            menu.Items.Add(new ToolStripMenuItem(
+                string.IsNullOrWhiteSpace(bookmark.Title) ? bookmark.Url : bookmark.Title,
+                null,
+                (_, _) => Selected?.LoadUrl(bookmark.Url)));
+        }
+
+        menu.Closed += (_, _) => menu.Dispose();
+        menu.Show(_bookmarksBar, at);
+    }
+
+    /// <summary>
+    /// The icon for a bookmark. Only the page's address is known, not the icon's,
+    /// so the site's root is asked for the usual name; it is fetched once and
+    /// then remembered, and until it arrives the bookmark simply has no icon.
+    /// </summary>
+    private Image? BookmarkIcon(Bookmark bookmark)
+    {
+        if (!Uri.TryCreate(bookmark.Url, UriKind.Absolute, out Uri? address)
+            || (address.Scheme != Uri.UriSchemeHttp && address.Scheme != Uri.UriSchemeHttps))
+        {
+            return null;
+        }
+
+        string host = address.Host;
+        if (_bookmarkIcons.TryGetValue(host, out Image? known))
+        {
+            return known;
+        }
+
+        _bookmarkIcons[host] = null;
+        string guess = $"{address.Scheme}://{host}/favicon.ico";
+
+        _ = Task.Run(async () =>
+        {
+            Image? icon = await FaviconCache.GetAsync(guess).ConfigureAwait(false);
+            OnUiThread(() =>
+            {
+                _bookmarkIcons[host] = icon;
+                _bookmarksBar.Invalidate();
+            });
+        });
+
+        return null;
     }
 
     private void StepTab(int direction)
@@ -507,11 +622,16 @@ public sealed class BrowserWindow : Form
         _captionButtons.IsMaximised = WindowState == FormWindowState.Maximized;
         _tabStrip.SetBounds(0, top, Math.Max(0, ClientSize.Width - buttons), caption);
         _toolbar.SetBounds(0, top + caption, ClientSize.Width, toolbar);
-        _pages.SetBounds(
-            0,
-            top + caption + toolbar,
-            ClientSize.Width,
-            Math.Max(0, ClientSize.Height - top - caption - toolbar));
+
+        // The bar is only there when there is something on it; an empty strip of
+        // chrome above every page is the sort of thing browsers used to do.
+        bool bar = _showBookmarksBar && _bookmarks.All.Count > 0;
+        int barHeight = bar ? Dip(BookmarksBarHeight) : 0;
+        _bookmarksBar.Visible = bar;
+        _bookmarksBar.SetBounds(0, top + caption + toolbar, ClientSize.Width, barHeight);
+
+        int pageTop = top + caption + toolbar + barHeight;
+        _pages.SetBounds(0, pageTop, ClientSize.Width, Math.Max(0, ClientSize.Height - pageTop));
     }
 
     protected override void OnHandleCreated(EventArgs e)

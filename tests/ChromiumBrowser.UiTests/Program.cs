@@ -28,6 +28,7 @@ internal static class Program
         CheckCaptionButtons();
         CheckShortcuts();
         CheckInternalPages();
+        CheckBookmarksBar();
 
         Console.WriteLine();
         Console.WriteLine($"{_total - _failures}/{_total} user interface checks passed.");
@@ -205,6 +206,48 @@ internal static class Program
             pages.Render(new Uri("browser://nowhere")).Contains("no such page", StringComparison.Ordinal));
 
         Directory.Delete(directory, true);
+    }
+
+    private static void CheckBookmarksBar()
+    {
+        Bookmark[] bookmarks =
+        [
+            new() { Url = "https://example.com/", Title = "Example" },
+            new() { Url = "https://nesdev.org/", Title = "NESdev Wiki" },
+            new() { Url = "https://levente.net/", Title = "levente.net" },
+        ];
+
+        using BookmarksBarControl bar = new();
+        bar.Size = new Size(600, 34);
+        bar.Show(bookmarks);
+
+        (Bookmark Bookmark, BookmarkAction Action)? asked = null;
+        bar.Requested += (_, request) => asked = request;
+
+        // The first bookmark starts at the bar's own left inset; a few pixels in
+        // is inside it whatever its title turned out to measure.
+        Click(bar, 20, 17);
+        Check("bar: a bookmark opens where it is clicked",
+            asked?.Bookmark.Url == "https://example.com/" && asked?.Action == BookmarkAction.Open,
+            $"got {asked?.Bookmark.Url} {asked?.Action}");
+
+        Click(bar, 20, 17, MouseButtons.Middle);
+        Check("bar: the middle button opens it in a new tab",
+            asked?.Action == BookmarkAction.OpenInNewTab, $"got {asked?.Action}");
+
+        asked = null;
+        Click(bar, 590, 17);
+        Check("bar: clicking past the last bookmark does nothing", asked is null);
+
+        // Narrow enough that they cannot all fit: the ones left over belong
+        // behind the chevron rather than being drawn half-width.
+        IReadOnlyList<Bookmark>? hidden = null;
+        bar.OverflowRequested += (_, overflow) => hidden = overflow.Hidden;
+        bar.Size = new Size(200, 34);
+        Click(bar, 190, 17);
+        Check("bar: what does not fit goes behind the chevron",
+            hidden is { Count: > 0 } && hidden[^1].Url == "https://levente.net/",
+            hidden is null ? "no overflow" : string.Join(", ", hidden.Select(b => b.Title)));
     }
 
     private static void CheckCaptionButtons()
