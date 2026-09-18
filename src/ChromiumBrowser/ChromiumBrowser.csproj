@@ -11,6 +11,13 @@
     <AssemblyName>ChromiumBrowser</AssemblyName>
     <Platforms>x64</Platforms>
     <PlatformTarget>x64</PlatformTarget>
+    <!-- The source-generated P/Invokes for the window frame need this. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- WFO1000 asks every public property of a control to say how the visual
+         designer should serialise it. Nothing here is ever opened in the
+         designer - the forms are code, with no .Designer.cs files - so the rule
+         only adds attributes nobody reads. -->
+    <NoWarn>$(NoWarn);WFO1000</NoWarn>
     <!-- CefSharp ships its Chromium binaries as native runtime assets; naming
          the runtime is what flattens them beside the executable. -->
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
