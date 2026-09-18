@@ -8,10 +8,6 @@ the same tabs, on the next machine.
 
 ![Chromium Browser with two tabs open](docs/screenshot.png)
 
-Two tabs — GitHub in front, Google behind it — with the bookmarks bar under the
-address bar. The window's chrome is painted by this project: the tab strip, the
-toolbar and the window buttons are drawn, not assembled from system controls.
-
 ## What it does
 
 - **Tabs** that drag to reorder, close with the middle button, shrink as they
