@@ -271,6 +271,35 @@ internal static class Program
 
         Check("pages: so does the history page",
             pages.Render(new Uri("browser://history")).Contains("Előzmények", StringComparison.Ordinal));
+
+        // The page says which language it is in, because that is what a screen
+        // reader and the engine's own spell checking go by.
+        Check("pages: and the page itself says which language it is in",
+            pages.Render(new Uri("browser://history")).Contains("<html lang=\"hu\">", StringComparison.Ordinal));
+
+        // The three that were added later, each checked somewhere different so
+        // that a language wired into one page only would show up.
+        Strings.Use("de");
+        Check("pages: German reaches the settings",
+            pages.Render(new Uri("browser://settings")) is string german
+            && german.Contains("Startseite", StringComparison.Ordinal)
+            && german.Contains("<title>Einstellungen</title>", StringComparison.Ordinal));
+
+        Strings.Use("fr");
+        Check("pages: French reaches the downloads",
+            pages.Render(new Uri("browser://downloads")).Contains("Téléchargements", StringComparison.Ordinal));
+
+        Strings.Use("es");
+        Check("pages: Spanish reaches the private window's page",
+            pages.Render(new Uri("browser://private")).Contains("Estás navegando en privado", StringComparison.Ordinal));
+
+        // Every language has to be in the list, or one of them could never be
+        // chosen in the first place.
+        string offered = pages.Render(new Uri("browser://settings"));
+        Check("pages: all five languages are on the settings page",
+            Strings.Languages.All(spoken => offered.Contains($"value=\"{spoken.Code}\"", StringComparison.Ordinal)
+                                            && offered.Contains(spoken.Name, StringComparison.Ordinal)));
+
         Strings.Use("en");
 
         Check("pages: an address with no page behind it says so",

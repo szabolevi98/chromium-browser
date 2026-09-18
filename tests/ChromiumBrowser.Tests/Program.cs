@@ -451,34 +451,72 @@ string Scratch()
 // ---------------------------------------------------------------- language
 
 {
-    Check("language: every phrase exists in both languages",
-        Strings.All.Values.All(p => p.English.Length > 0 && p.Hungarian.Length > 0),
-        string.Join(", ", Strings.All.Where(p => p.Value.Hungarian.Length == 0).Select(p => p.Key)));
+    Check("language: five languages are on offer",
+        Strings.Languages.Select(s => s.Code).ToList() is ["en", "hu", "de", "fr", "es"],
+        string.Join(", ", Strings.Languages.Select(s => s.Code)));
 
-    // A phrase copied across untranslated is the usual way a translation rots,
-    // and the few that are the same in both languages are known by name.
-    string[] sameInBoth = ["button.ok"];
-    string[] untranslated = Strings.All
-        .Where(p => p.Value.English == p.Value.Hungarian && !sameInBoth.Contains(p.Key))
-        .Select(p => p.Key)
+    Check("language: each one is named in itself, which is how people find theirs",
+        Strings.Languages.Select(s => s.Name).ToList() is ["English", "Magyar", "Deutsch", "Français", "Español"]);
+
+    string[] missing = Strings.All
+        .Where(phrase => phrase.Value.Every.Any(text => text.Length == 0))
+        .Select(phrase => phrase.Key)
         .ToArray();
+    Check("language: every phrase exists in every language",
+        missing.Length == 0, string.Join(", ", missing));
+
+    // A phrase copied across untranslated is the usual way a translation rots.
+    // Some words really are the same in two languages, and those are known by
+    // name rather than waved through by a rule.
+    (string Key, int Language)[] sameAsEnglish =
+    [
+        ("button.ok", 1), ("button.ok", 2), ("button.ok", 3),        // OK, everywhere but Spanish
+        ("menu.downloads", 2), ("page.downloads", 2),                // Downloads is the German word too
+        ("bookmark.name", 2),                                        // Name
+        ("about.version", 2), ("about.version", 3),                  // Version
+        ("settings.pageOne", 3), ("settings.pageMany", 3),           // page, pages
+    ];
+
+    List<string> untranslated = [];
+    foreach ((string key, Strings.Phrase phrase) in Strings.All)
+    {
+        string[] every = phrase.Every;
+        for (int language = 1; language < every.Length; language++)
+        {
+            if (every[language] == every[0] && !sameAsEnglish.Contains((key, language)))
+            {
+                untranslated.Add($"{key} [{Strings.Languages[language].Code}]");
+            }
+        }
+    }
+
     Check("language: nothing was left in English by accident",
-        untranslated.Length == 0, string.Join(", ", untranslated));
+        untranslated.Count == 0, string.Join(", ", untranslated));
+
+    (string Code, string NewTab)[] expected =
+    [
+        ("hu", "Új lap"), ("de", "Neuer Tab"), ("fr", "Nouvel onglet"), ("es", "Nueva pestaña"),
+    ];
+
+    foreach ((string code, string newTab) in expected)
+    {
+        Strings.Use(code);
+        Check($"language: {code} is what comes out", Strings.Of("menu.newTab") == newTab, Strings.Of("menu.newTab"));
+    }
 
     Strings.Use("hu");
-    Check("language: Hungarian is what comes out", Strings.Of("menu.newTab") == "Új lap");
     Check("language: and the browser knows which it is in", Strings.IsHungarian);
 
-    Strings.Use("fr");
-    Check("language: a language there is no translation for is English",
-        !Strings.IsHungarian && Strings.Of("menu.newTab") == "New tab");
+    Strings.Use("kl");
+    Check("language: one the browser does not speak is English rather than nothing",
+        Strings.Language == "en" && Strings.Of("menu.newTab") == "New tab");
 
     Check("language: a phrase nobody has written yet shows its name rather than nothing",
         Strings.Of("nothing.like.this") == "nothing.like.this");
 
     bool told = false;
     Strings.Changed += (_, _) => told = true;
-    Strings.Use("hu");
+    Strings.Use("de");
     Check("language: changing it says so, so what is on screen can be redrawn", told);
     Strings.Use("en");
 }

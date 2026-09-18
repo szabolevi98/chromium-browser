@@ -235,6 +235,15 @@ public sealed class InternalPages
 
         Settings settings = _settings.Current;
 
+        // Built from the list rather than written out, so adding a language is
+        // one line in one table and not an edit here as well.
+        StringBuilder languages = new();
+        foreach (Spoken spoken in Strings.Languages)
+        {
+            languages.Append($"<option value=\"{spoken.Code}\"{Selected(spoken.Code, settings.Language)}>"
+                + $"{Escape(spoken.Name)}</option>");
+        }
+
         StringBuilder engines = new();
         foreach (SearchEngine engine in SearchEngines.All)
         {
@@ -272,10 +281,7 @@ public sealed class InternalPages
                   <option value="Dark"{Selected("Dark", settings.Theme.ToString())}>{Strings.Of("settings.themeDark")}</option>
                 </select>
                 <label for="language" class="after">{Strings.Of("settings.language")}</label>
-                <select id="language" class="field" name="language">
-                  <option value="en"{Selected("en", settings.Language)}>English</option>
-                  <option value="hu"{Selected("hu", settings.Language)}>Magyar</option>
-                </select>
+                <select id="language" class="field" name="language">{languages}</select>
 
                 <label class="tick"><input type="checkbox" name="bar" value="1"
                   {(settings.ShowBookmarksBar ? "checked" : string.Empty)}> {Strings.Of("settings.bar")}</label>
@@ -328,7 +334,7 @@ public sealed class InternalPages
 
         return $$"""
             <!doctype html>
-            <html lang="en">
+            <html lang="{{Strings.Language}}">
             <head>
             <meta charset="utf-8">
             <title>{{Escape(title)}}</title>
