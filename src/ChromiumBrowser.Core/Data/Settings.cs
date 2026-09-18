@@ -26,6 +26,13 @@ public sealed record Settings
     /// <summary>Two letters: <c>en</c> or <c>hu</c>.</summary>
     public string Language { get; init; } = "en";
 
+    /// <summary>
+    /// Whether starting the browser brings back the windows and tabs that were
+    /// open. On by default: closing a browser by accident with a dozen tabs in
+    /// it is common, and losing them is the part people remember.
+    /// </summary>
+    public bool RestoreSession { get; init; } = true;
+
     /// <summary>Where a search for this text goes.</summary>
     public string SearchTemplate =>
         string.Equals(SearchEngine, "Custom", StringComparison.OrdinalIgnoreCase)

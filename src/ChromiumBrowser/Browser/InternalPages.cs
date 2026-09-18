@@ -32,6 +32,7 @@ public sealed class InternalPages
     private readonly DownloadStore _downloads;
     private readonly SettingsStore _settings;
     private readonly BookmarkStore _bookmarks;
+    private readonly SessionStore _session;
     private readonly Action<string> _reveal;
 
     public InternalPages(
@@ -39,8 +40,10 @@ public sealed class InternalPages
         DownloadStore downloads,
         SettingsStore settings,
         BookmarkStore bookmarks,
+        SessionStore session,
         Action<string> reveal)
     {
+        _session = session;
         _history = history;
         _downloads = downloads;
         _settings = settings;
@@ -209,6 +212,7 @@ public sealed class InternalPages
                     ? theme
                     : current.Theme,
                 ShowBookmarksBar = query.ContainsKey("bar"),
+                RestoreSession = query.ContainsKey("restore"),
                 Language = query.GetValueOrDefault("language", current.Language),
             });
 
@@ -223,6 +227,7 @@ public sealed class InternalPages
             {
                 case "history": _history.ClearAll(); break;
                 case "downloads": _downloads.Clear(); break;
+                case "session": _session.Clear(); break;
             }
 
             saved = $"<p class=\"saved\">{Strings.Of("settings.cleared")}</p>";
@@ -276,15 +281,23 @@ public sealed class InternalPages
                   {(settings.ShowBookmarksBar ? "checked" : string.Empty)}> {Strings.Of("settings.bar")}</label>
               </section>
 
+              <section>
+                <label>{Strings.Of("settings.onStart")}</label>
+                <label class="tick"><input type="checkbox" name="restore" value="1"
+                  {(settings.RestoreSession ? "checked" : string.Empty)}> {Strings.Of("settings.restore")}</label>
+              </section>
+
               <button class="button primary" type="submit">{Strings.Of("settings.save")}</button>
             </form>
 
             <section>
               <label>{Strings.Of("settings.clear")}</label>
               <p class="hint">{Count(_history.All.Count, "settings.page")} {Strings.Of("settings.inHistory")},
-                 {Count(_bookmarks.All.Count, "settings.bookmark")} {Strings.Of("settings.kept")}.</p>
+                 {Count(_bookmarks.All.Count, "settings.bookmark")} {Strings.Of("settings.kept")},
+                 {Count(_session.Windows.Sum(window => window.Tabs.Count), "settings.tab")} {Strings.Of("settings.fromLastTime")}.</p>
               <a class="button" href="{Scheme}://settings?forget=history">{Strings.Of("settings.clearHistory")}</a>
               <a class="button" href="{Scheme}://settings?forget=downloads">{Strings.Of("settings.clearDownloads")}</a>
+              <a class="button" href="{Scheme}://settings?forget=session">{Strings.Of("settings.clearSession")}</a>
             </section>
             """;
 

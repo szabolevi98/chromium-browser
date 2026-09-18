@@ -86,7 +86,8 @@ public sealed class BrowserWindow : Form
         string? startUrl,
         bool isPrivate,
         Action<string?, bool> openWindow,
-        ISchemeHandlerFactory internalPages)
+        ISchemeHandlerFactory internalPages,
+        SavedWindow? restore = null)
     {
         _settings = settings;
         _profile = profile;
@@ -103,6 +104,7 @@ public sealed class BrowserWindow : Form
         _context = isPrivate ? PrivateContext(internalPages) : null;
 
         Text = Branding.Name;
+        Icon = AppIcon();
         MinimumSize = new Size(560, 380);
         Size = new Size(1280, 820);
         StartPosition = FormStartPosition.CenterScreen;
@@ -156,7 +158,14 @@ public sealed class BrowserWindow : Form
 
         _toolbar.IsPrivate = isPrivate;
 
-        OpenTab(startUrl ?? NewTabPage);
+        if (restore is { Tabs.Count: > 0 })
+        {
+            RestoreFrom(restore);
+        }
+        else
+        {
+            OpenTab(startUrl ?? NewTabPage);
+        }
     }
 
     /// <summary>
@@ -183,6 +192,18 @@ public sealed class BrowserWindow : Form
             handler);
     }
 
+    /// <summary>
+    /// The icon the taskbar and Alt+Tab show. The window draws its own caption
+    /// and has no room for it up there, but everywhere else Windows asks.
+    /// </summary>
+    internal static Icon? AppIcon()
+    {
+        using Stream? stream = typeof(BrowserWindow).Assembly
+            .GetManifestResourceStream("ChromiumBrowser.app.ico");
+
+        return stream is null ? null : new Icon(stream);
+    }
+
     private string HomePage => _settings.Current.HomePage;
 
     /// <summary>
@@ -203,7 +224,7 @@ public sealed class BrowserWindow : Form
 
     // ------------------------------------------------------------------- tabs
 
-    private void OpenTab(string url)
+    private void OpenTab(string url, string? knownTitle = null)
     {
         ChromiumWebBrowser browser = new(url, _context) { Dock = DockStyle.Fill };
 
@@ -264,6 +285,8 @@ public sealed class BrowserWindow : Form
             {
                 _toolbar.ShowAddress(e.Address);
             }
+
+            ContentsChanged?.Invoke(this, EventArgs.Empty);
         });
 
         browser.KeyboardHandler = new ShortcutHandler(shortcut => OnUiThread(() => Run(shortcut)));
@@ -302,8 +325,14 @@ public sealed class BrowserWindow : Form
         _browsers.Add(browser);
         _pages.Controls.Add(browser);
         browser.CreateControl();
-        _tabStrip.AddTab(new TabItem { Title = Strings.Of("tab.new"), IsLoading = true });
+        _tabStrip.AddTab(new TabItem
+        {
+            Title = string.IsNullOrWhiteSpace(knownTitle) ? Strings.Of("tab.new") : knownTitle,
+            IsLoading = true,
+        });
+
         ShowSelectedPage();
+        ContentsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void CloseTab(int index)
@@ -327,6 +356,7 @@ public sealed class BrowserWindow : Form
 
         _tabStrip.RemoveTab(index);
         ShowSelectedPage();
+        ContentsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void MoveBrowser(int from, int to)
@@ -339,6 +369,7 @@ public sealed class BrowserWindow : Form
         ChromiumWebBrowser browser = _browsers[from];
         _browsers.RemoveAt(from);
         _browsers.Insert(Math.Clamp(to, 0, _browsers.Count), browser);
+        ContentsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void ShowSelectedPage()
@@ -436,6 +467,91 @@ public sealed class BrowserWindow : Form
         _isPrivate
             ? $"{tab} - {Branding.Name} ({Strings.Of("private.badge")})"
             : $"{tab} - {Branding.Name}";
+
+    /// <summary>
+    /// Raised whenever what this window holds has changed in a way worth
+    /// writing down: a tab opened, closed, moved or gone somewhere else.
+    /// </summary>
+    public event EventHandler? ContentsChanged;
+
+    /// <summary>Whether this window is one that keeps nothing.</summary>
+    public bool IsPrivate => _isPrivate;
+
+    /// <summary>
+    /// What this window would need to be brought back: its tabs, which one was
+    /// in front, and where it sat. A maximised window reports the size it would
+    /// go back to, so restoring it maximised does not leave it filling the
+    /// screen at the size of the screen once un-maximised.
+    /// </summary>
+    public SavedWindow Snapshot()
+    {
+        Rectangle bounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
+
+        List<SavedTab> tabs = [];
+        for (int index = 0; index < _browsers.Count; index++)
+        {
+            string url = _browsers[index].Address ?? string.Empty;
+
+            // A tab that never got anywhere is not worth bringing back, and an
+            // address the engine has not settled on yet would come back as
+            // about:blank.
+            if (url.Length == 0 || url.StartsWith("about:", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            tabs.Add(new SavedTab
+            {
+                Url = url,
+                Title = index < _tabStrip.Tabs.Count ? _tabStrip.Tabs[index].Title : string.Empty,
+            });
+        }
+
+        return new SavedWindow
+        {
+            Tabs = tabs,
+            Selected = Math.Clamp(_tabStrip.SelectedIndex, 0, Math.Max(0, tabs.Count - 1)),
+            X = bounds.X,
+            Y = bounds.Y,
+            Width = bounds.Width,
+            Height = bounds.Height,
+            Maximised = WindowState == FormWindowState.Maximized,
+        };
+    }
+
+    /// <summary>
+    /// Opens the tabs a previous run left, and puts the window back where it
+    /// was — but only if that place is still on a screen, because a window
+    /// restored onto a monitor that has since been unplugged is a window
+    /// nobody can reach.
+    /// </summary>
+    private void RestoreFrom(SavedWindow saved)
+    {
+        if (saved.Width > 200 && saved.Height > 150)
+        {
+            Rectangle wanted = new(saved.X, saved.Y, saved.Width, saved.Height);
+            if (Screen.AllScreens.Any(screen => screen.WorkingArea.IntersectsWith(wanted)))
+            {
+                StartPosition = FormStartPosition.Manual;
+                Bounds = wanted;
+            }
+        }
+
+        foreach (SavedTab tab in saved.Tabs)
+        {
+            OpenTab(tab.Url, tab.Title);
+        }
+
+        if (saved.Selected >= 0 && saved.Selected < _tabStrip.Tabs.Count)
+        {
+            _tabStrip.SelectedIndex = saved.Selected;
+        }
+
+        if (saved.Maximised)
+        {
+            WindowState = FormWindowState.Maximized;
+        }
+    }
 
     /// <summary>
     /// Takes an address from a second launch: a tab if there is one, and the
