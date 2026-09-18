@@ -16,12 +16,25 @@ internal static class Program
     {
         ApplicationConfiguration.Initialize();
 
+        // A private window can be asked for on the command line, the way every
+        // other browser allows, so a shortcut can open one straight away.
+        bool wantsPrivate = args.Any(a => a is "--private" or "-private" or "/private");
+        string? startUrl = args.FirstOrDefault(a => !a.StartsWith('-') && !a.StartsWith('/'));
+
         ProfileLocation profile = ProfileLocator.Resolve(
             AppContext.BaseDirectory,
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             ProfileLocator.CanWrite);
 
         Directory.CreateDirectory(profile.Path);
+
+        // Before the engine is started, because starting it is the expensive
+        // part and a second launch is only here to hand over an address.
+        using Mutex? only = SingleInstance.Claim(profile.Path);
+        if (only is null && SingleInstance.Send(profile.Path, startUrl))
+        {
+            return 0;
+        }
 
         // The stores belong to the profile rather than to a window, so several
         // windows would share one history rather than fight over the file.
@@ -36,8 +49,10 @@ internal static class Program
         // or it would come up in the system's colours and change under the user.
         Theme.Choose(settings.Current.Theme);
 
-        BrowserWindow? window = null;
+        BrowserSession session = new(profile, bookmarks, history, downloads, settings);
         InternalPages pages = new(history, downloads, settings, bookmarks, BrowserWindow.RevealFile);
+        InternalSchemeFactory internalPages = new(() => session.AnyWindow, pages);
+        session.InternalPages = internalPages;
 
         CefSettings cefSettings = new()
         {
@@ -63,7 +78,7 @@ internal static class Program
 
             // The window does not exist yet: the engine wants its schemes before
             // it starts, so the factory is given a way to find it later.
-            SchemeHandlerFactory = new InternalSchemeFactory(() => window, pages),
+            SchemeHandlerFactory = internalPages,
         });
 
         if (!Cef.Initialize(cefSettings, performDependencyCheck: true, browserProcessHandler: null))
@@ -76,12 +91,21 @@ internal static class Program
             return 1;
         }
 
-        window = new BrowserWindow(profile, bookmarks, history, downloads, settings, args.FirstOrDefault());
-        using (window)
-        {
-            Application.Run(window);
-        }
+        BrowserWindow first = session.Open(startUrl, wantsPrivate);
 
+        SingleInstance.Listen(profile.Path, url => first.BeginInvoke(() =>
+        {
+            // The newest window rather than the first: it is the one in front,
+            // and the one a person handing over an address is looking for.
+            (session.Newest ?? first).Accept(url);
+        }));
+
+        Application.Run(session);
+
+        // After the last window, not after the first: the engine is shared by
+        // all of them, and shutting it down while another is still open takes
+        // that one's pages with it.
+        Cef.Shutdown();
         return 0;
     }
 }

@@ -44,7 +44,13 @@ toolbar are drawn rather than assembled from system controls.
 - [x] Find on a page: Ctrl+F opens a bar in the chrome, Enter and F3 walk
       the matches, and the count beside the box climbs as the engine
       finds them
-- [ ] Session restore, private windows
+- [x] Private windows: their own cookies and cache, in memory and gone when
+      the window closes, nothing written to the history or the download
+      list, and a badge in the toolbar so one is never mistaken for the other
+- [x] One copy per set of data: a second launch hands its address to the
+      browser already running rather than starting a rival over the same
+      files, while a copy on a memory stick stays a browser of its own
+- [ ] Session restore
 
 ## What 2.0 has to do at least
 
@@ -58,8 +64,8 @@ Needs the .NET 9 SDK.
 
 ```
 dotnet build ChromiumBrowser.sln
-dotnet run --project tests/ChromiumBrowser.Tests    # 71 offline checks
-dotnet run --project tests/ChromiumBrowser.UiTests  # 52 user interface checks
+dotnet run --project tests/ChromiumBrowser.Tests    # 76 offline checks
+dotnet run --project tests/ChromiumBrowser.UiTests  # 65 user interface checks
 ```
 
 The user interface checks drive the controls the way a pointer would, without

@@ -329,6 +329,39 @@ string Scratch()
     Directory.Delete(directory, true);
 }
 
+// ------------------------------------------------------- what a private window keeps
+
+{
+    string directory = Path.Combine(Path.GetTempPath(), $"cb-private-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(directory);
+    string path = Path.Combine(directory, "history.json");
+
+    // A store with nowhere to write behaves exactly like one that has somewhere
+    // to write, right up to the point where it would touch the disk. That is
+    // what a private window's lists are.
+    HistoryStore remembered = new(path);
+    remembered.Record("https://example.com/", "Example", DateTimeOffset.Now);
+
+    HistoryStore forgetful = new(string.Empty);
+    forgetful.Record("https://example.com/", "Example", DateTimeOffset.Now);
+
+    Check("private: a list with nowhere to write still works while it is open",
+        forgetful.All.Count == 1 && forgetful.All[0].Title == "Example");
+    Check("private: and writes no file", Directory.GetFiles(directory).Length == 1,
+        string.Join(", ", Directory.GetFiles(directory).Select(Path.GetFileName)));
+    Check("private: while the one with a path did write", File.Exists(path));
+
+    Check("private: nothing comes back from a store that was never written",
+        new HistoryStore(string.Empty).All.Count == 0);
+
+    DownloadStore downloads = new(string.Empty);
+    downloads.Begin(1, "https://example.com/file.zip", "file.zip", 10);
+    Check("private: the same goes for what it downloaded",
+        downloads.All.Count == 1 && new DownloadStore(string.Empty).All.Count == 0);
+
+    Directory.Delete(directory, true);
+}
+
 // ------------------------------------------------------------ find counter
 
 {
