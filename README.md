@@ -71,7 +71,7 @@ Needs the .NET 9 SDK.
 ```
 dotnet build ChromiumBrowser.sln
 dotnet run --project tests/ChromiumBrowser.Tests    # 90 offline checks
-dotnet run --project tests/ChromiumBrowser.UiTests  # 80 user interface checks
+dotnet run --project tests/ChromiumBrowser.UiTests  # 83 user interface checks
 ```
 
 The user interface checks drive the controls the way a pointer would, without
