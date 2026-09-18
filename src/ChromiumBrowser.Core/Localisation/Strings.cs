@@ -63,6 +63,12 @@ public static class Strings
         ["menu.exit"] = ("Exit", "Kilépés"),
         ["menu.empty"] = ("Nothing yet", "Még semmi"),
 
+        ["menu.find"] = ("Find on this page...", "Keresés az oldalon..."),
+
+        // Finding words on a page
+        ["find.placeholder"] = ("Find on this page", "Keresés az oldalon"),
+        ["find.none"] = ("No matches", "Nincs találat"),
+
         // A bookmark's own menu
         ["bookmark.open"] = ("Open", "Megnyitás"),
         ["bookmark.openNewTab"] = ("Open in a new tab", "Megnyitás új lapon"),

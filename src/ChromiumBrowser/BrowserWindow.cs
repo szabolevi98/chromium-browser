@@ -6,6 +6,7 @@ using ChromiumBrowser.Controls;
 using ChromiumBrowser.Core;
 using ChromiumBrowser.Core.Data;
 using ChromiumBrowser.Core.Profile;
+using ChromiumBrowser.Core.Ui;
 using ChromiumBrowser.Core.Web;
 using ChromiumBrowser.Native;
 using ChromiumBrowser.Ui;
@@ -32,6 +33,8 @@ public sealed class BrowserWindow : Form
 
     private const int BookmarksBarHeight = 34;
 
+    private const int FindBarHeight = 38;
+
     /// <summary>
     /// A sliver of window above the tabs. It exists so the top edge can still be
     /// grabbed to resize: every pixel covered by a child control belongs to that
@@ -44,6 +47,7 @@ public sealed class BrowserWindow : Form
     private readonly CaptionButtons _captionButtons = new();
     private readonly ToolbarControl _toolbar = new();
     private readonly BookmarksBarControl _bookmarksBar = new();
+    private readonly FindBarControl _findBar = new();
     private readonly Panel _pages = new() { Dock = DockStyle.None };
     private readonly List<ChromiumWebBrowser> _browsers = [];
 
@@ -111,7 +115,12 @@ public sealed class BrowserWindow : Form
         _bookmarksBar.OverflowRequested += (_, overflow) => ShowOverflow(overflow.At, overflow.Hidden);
         _bookmarksBar.Show(_bookmarks.All);
 
+        _findBar.SearchChanged += (_, text) => Find(text, forward: true, again: false);
+        _findBar.StepRequested += (_, forward) => Find(_findBar.SearchText, forward, again: true);
+        _findBar.CloseRequested += (_, _) => CloseFind();
+
         Controls.Add(_pages);
+        Controls.Add(_findBar);
         Controls.Add(_bookmarksBar);
         Controls.Add(_toolbar);
         Controls.Add(_tabStrip);
@@ -201,6 +210,16 @@ public sealed class BrowserWindow : Form
 
         browser.KeyboardHandler = new ShortcutHandler(shortcut => OnUiThread(() => Run(shortcut)));
 
+        browser.FindHandler = new FindWatcher(result => OnUiThread(() =>
+        {
+            // A result from a page that is no longer the one on screen would
+            // relabel the bar with another tab's count.
+            if (ReferenceEquals(browser, Selected))
+            {
+                _findBar.ShowCounter(FindCounter.Text(_findBar.SearchText, result.Count, result.Active));
+            }
+        }));
+
         browser.DisplayHandler = new FaviconWatcher(async url =>
         {
             Image? icon = await FaviconCache.GetAsync(url).ConfigureAwait(false);
@@ -266,6 +285,10 @@ public sealed class BrowserWindow : Form
 
     private void ShowSelectedPage()
     {
+        // A search belongs to the page it was typed against, so moving to
+        // another tab ends it rather than carrying a count across.
+        CloseFind();
+
         ChromiumWebBrowser? selected = Selected;
         foreach (ChromiumWebBrowser browser in _browsers)
         {
@@ -334,6 +357,10 @@ public sealed class BrowserWindow : Form
                     ShowBookmarksBar = !_settings.Current.ShowBookmarksBar,
                 });
                 break;
+
+            case BrowserCommand.FindInPage: OpenFind(); break;
+            case BrowserCommand.FindNext: Find(_findBar.SearchText, forward: true, again: true); break;
+            case BrowserCommand.FindPrevious: Find(_findBar.SearchText, forward: false, again: true); break;
 
             case BrowserCommand.ShowSettings: OpenTab($"{InternalPages.Scheme}://settings"); break;
             case BrowserCommand.ShowHistory: OpenTab($"{InternalPages.Scheme}://history"); break;
@@ -486,6 +513,93 @@ public sealed class BrowserWindow : Form
         browser.SetZoomLevel(level);
     }
 
+    // ------------------------------------------------------ finding on a page
+
+    /// <summary>
+    /// Shows the find bar. Pressing the shortcut while it is already open puts
+    /// the cursor back in the box with the last search selected, which is what
+    /// makes the key usable for "search for something else" as well.
+    /// </summary>
+    private void OpenFind()
+    {
+        bool wasHidden = !_findBar.Visible;
+
+        // The page holds the keyboard the way a window does, not the way a
+        // control does: it is the engine's own window, and asking a text box
+        // beside it to take the focus leaves the typing going into the page.
+        // The engine has to be told to let go first.
+        PageKeyboard(mine: false);
+        _findBar.Open();
+
+        if (wasHidden)
+        {
+            PerformLayout();
+        }
+
+        // Reopening on a page that still holds a search: ask again, so the
+        // matches light up rather than the bar showing a count for highlights
+        // that are no longer drawn.
+        if (_findBar.SearchText.Length > 0)
+        {
+            Find(_findBar.SearchText, forward: true, again: false);
+        }
+    }
+
+    /// <summary>
+    /// Asks the page for a word. <paramref name="again"/> is what separates a
+    /// fresh search from walking the matches of one already running: the engine
+    /// starts over for the first and steps for the second.
+    /// </summary>
+    private void Find(string text, bool forward, bool again)
+    {
+        ChromiumWebBrowser? browser = Selected;
+        if (browser is null)
+        {
+            return;
+        }
+
+        if (text.Length == 0)
+        {
+            browser.StopFinding(clearSelection: true);
+            _findBar.ShowCounter(string.Empty);
+            return;
+        }
+
+        browser.Find(text, forward, matchCase: false, again);
+    }
+
+    /// <summary>
+    /// Hides the bar and takes the highlighting with it. What was searched for
+    /// stays in the box, because the next Ctrl+F is usually the same word.
+    /// </summary>
+    private void CloseFind()
+    {
+        if (!_findBar.Visible)
+        {
+            return;
+        }
+
+        Selected?.StopFinding(clearSelection: true);
+        _findBar.ShowCounter(string.Empty);
+        _findBar.Visible = false;
+        PerformLayout();
+        PageKeyboard(mine: true);
+    }
+
+    /// <summary>
+    /// Hands the keyboard to the page, or takes it back for the chrome.
+    /// </summary>
+    private void PageKeyboard(bool mine)
+    {
+        ChromiumWebBrowser? browser = Selected;
+        if (browser is not { IsBrowserInitialized: true })
+        {
+            return;
+        }
+
+        browser.GetBrowser().GetHost().SetFocus(mine);
+    }
+
     private void ShowMenu(Point screen)
     {
         ContextMenuStrip menu = new()
@@ -514,6 +628,7 @@ public sealed class BrowserWindow : Form
         Item(Strings.Of("menu.history"), "Ctrl+H", () => OpenTab($"{InternalPages.Scheme}://history"));
         Item(Strings.Of("menu.downloads"), "Ctrl+J", () => OpenTab($"{InternalPages.Scheme}://downloads"));
         menu.Items.Add(new ToolStripSeparator());
+        Item(Strings.Of("menu.find"), "Ctrl+F", OpenFind);
         Item(Strings.Of("menu.zoomIn"), "Ctrl+Plus", () => Zoom(0.5));
         Item(Strings.Of("menu.zoomOut"), "Ctrl+Minus", () => Zoom(-0.5));
         Item(Strings.Of("menu.zoomReset"), "Ctrl+0", () => Zoom(null));
@@ -624,7 +739,10 @@ public sealed class BrowserWindow : Form
         _bookmarksBar.Visible = bar;
         _bookmarksBar.SetBounds(0, top + caption + toolbar, ClientSize.Width, barHeight);
 
-        int pageTop = top + caption + toolbar + barHeight;
+        int findHeight = _findBar.Visible ? Dip(FindBarHeight) : 0;
+        _findBar.SetBounds(0, top + caption + toolbar + barHeight, ClientSize.Width, findHeight);
+
+        int pageTop = top + caption + toolbar + barHeight + findHeight;
         _pages.SetBounds(0, pageTop, ClientSize.Width, Math.Max(0, ClientSize.Height - pageTop));
     }
 
@@ -649,6 +767,7 @@ public sealed class BrowserWindow : Form
     {
         Strings.Use(_settings.Current.Language);
         Theme.Choose(_settings.Current.Theme);
+        _findBar.ApplyTheme(); // the box's own prompt is one of the translated phrases
         RefreshBookmarks();
         ReloadInternalPages();
     }
@@ -673,6 +792,7 @@ public sealed class BrowserWindow : Form
     {
         BackColor = Theme.Current.Chrome;
         _toolbar.ApplyTheme();
+        _findBar.ApplyTheme();
         ApplyWindowStyling();
         Invalidate(true);
         ReloadInternalPages();

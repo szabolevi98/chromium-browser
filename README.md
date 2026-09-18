@@ -41,7 +41,10 @@ toolbar are drawn rather than assembled from system controls.
       has been kept
 - [x] English and Hungarian, switched in the settings, with a check that
       nothing was left untranslated
-- [ ] Session restore, private windows, find in page
+- [x] Find on a page: Ctrl+F opens a bar in the chrome, Enter and F3 walk
+      the matches, and the count beside the box climbs as the engine
+      finds them
+- [ ] Session restore, private windows
 
 ## What 2.0 has to do at least
 
@@ -55,8 +58,8 @@ Needs the .NET 9 SDK.
 
 ```
 dotnet build ChromiumBrowser.sln
-dotnet run --project tests/ChromiumBrowser.Tests    # 65 offline checks
-dotnet run --project tests/ChromiumBrowser.UiTests  # 41 user interface checks
+dotnet run --project tests/ChromiumBrowser.Tests    # 71 offline checks
+dotnet run --project tests/ChromiumBrowser.UiTests  # 52 user interface checks
 ```
 
 The user interface checks drive the controls the way a pointer would, without

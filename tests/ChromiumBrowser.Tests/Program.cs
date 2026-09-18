@@ -329,6 +329,36 @@ string Scratch()
     Directory.Delete(directory, true);
 }
 
+// ------------------------------------------------------------ find counter
+
+{
+    Check("find: an empty box says nothing at all",
+        FindCounter.Text(string.Empty, count: 0, active: 0).Length == 0);
+
+    Check("find: a word that is not there says so rather than showing zeros",
+        FindCounter.Text("wiki", count: 0, active: 0) == "No matches",
+        FindCounter.Text("wiki", 0, 0));
+
+    Check("find: matches are counted from one",
+        FindCounter.Text("wiki", count: 17, active: 3) == "3/17",
+        FindCounter.Text("wiki", 17, 3));
+
+    // The engine reports what it has found while it is still looking, so for a
+    // moment there are matches and nothing active yet. "0/17" reads as a fault.
+    Check("find: a count that has arrived before the active match does not show a zero",
+        FindCounter.Text("wiki", count: 17, active: 0) == "1/17",
+        FindCounter.Text("wiki", 17, 0));
+
+    Check("find: and an ordinal past the end is held to it",
+        FindCounter.Text("wiki", count: 2, active: 9) == "2/2",
+        FindCounter.Text("wiki", 2, 9));
+
+    Strings.Use("hu");
+    Check("find: it speaks the language in force",
+        FindCounter.Text("wiki", 0, 0) == "Nincs találat", FindCounter.Text("wiki", 0, 0));
+    Strings.Use("en");
+}
+
 // ---------------------------------------------------------------- language
 
 {
