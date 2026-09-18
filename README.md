@@ -9,6 +9,11 @@ is nothing to install and nothing is written to the registry.
 > branch and as [release v1.0.1](https://github.com/szabolevi98/chromium-browser/releases/tag/v1.0.1).
 > It is not being modernised — it is being replaced, from an empty folder.
 
+![The window as it stands](docs/screenshot.png)
+
+The chrome is painted by this project: the tab strip, the window buttons and the
+toolbar are drawn rather than assembled from system controls.
+
 ## Where it is
 
 - [x] The engine runs: CefSharp 152 (Chromium 152) on .NET 9, x64
@@ -56,7 +61,7 @@ src/ChromiumBrowser.Core     profile, layout arithmetic, and the data behind the
                              browser — no user interface dependencies
 tests/ChromiumBrowser.Tests   offline checks
 tests/ChromiumBrowser.UiTests checks that drive the controls
-tools/                        the screenshot tool and the icon builder
+tools/                        the screenshot tool
 ```
 
 ## License
