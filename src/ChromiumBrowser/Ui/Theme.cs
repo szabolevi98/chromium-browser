@@ -1,3 +1,4 @@
+using ChromiumBrowser.Core.Data;
 using Microsoft.Win32;
 
 namespace ChromiumBrowser.Ui;
@@ -72,13 +73,34 @@ public static class Theme
     /// <summary>Raised after <see cref="Current"/> has changed.</summary>
     public static event EventHandler? Changed;
 
-    /// <summary>Whether Windows is currently in its dark mode.</summary>
+    /// <summary>Whether the browser is currently drawing itself dark.</summary>
     public static bool IsDark { get; private set; } = ReadIsDark();
+
+    /// <summary>
+    /// Follow Windows, or insist on one or the other. Following is the default
+    /// because a window that stays light when the desktop goes dark is the first
+    /// thing anybody notices.
+    /// </summary>
+    public static ThemeChoice Choice { get; private set; } = ThemeChoice.System;
+
+    /// <summary>Takes the choice from the settings and redraws everything.</summary>
+    public static void Choose(ThemeChoice choice)
+    {
+        if (choice == Choice)
+        {
+            return;
+        }
+
+        Choice = choice;
+        IsDark = Resolve();
+        Current = Build();
+        Changed?.Invoke(null, EventArgs.Empty);
+    }
 
     /// <summary>Re-reads the system setting; called when a window is told the theme changed.</summary>
     public static void Refresh()
     {
-        bool dark = ReadIsDark();
+        bool dark = Resolve();
         Palette palette = Build();
         if (dark == IsDark && palette == Current)
         {
@@ -90,9 +112,16 @@ public static class Theme
         Changed?.Invoke(null, EventArgs.Empty);
     }
 
+    private static bool Resolve() => Choice switch
+    {
+        ThemeChoice.Light => false,
+        ThemeChoice.Dark => true,
+        _ => ReadIsDark(),
+    };
+
     private static Palette Build()
     {
-        Palette palette = ReadIsDark() ? Dark : Light;
+        Palette palette = Resolve() ? Dark : Light;
         Color? accent = ReadAccent();
         return accent is null ? palette : palette with { Accent = accent.Value };
     }

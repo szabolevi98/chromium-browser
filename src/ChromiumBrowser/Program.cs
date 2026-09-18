@@ -4,6 +4,7 @@ using ChromiumBrowser.Browser;
 using ChromiumBrowser.Core;
 using ChromiumBrowser.Core.Data;
 using ChromiumBrowser.Core.Profile;
+using ChromiumBrowser.Ui;
 
 namespace ChromiumBrowser;
 
@@ -26,11 +27,16 @@ internal static class Program
         BookmarkStore bookmarks = new(Path.Combine(profile.Path, "bookmarks.json"));
         HistoryStore history = new(Path.Combine(profile.Path, "history.json"));
         DownloadStore downloads = new(Path.Combine(profile.Path, "downloads.json"));
+        SettingsStore settings = new(Path.Combine(profile.Path, "settings.json"));
+
+        // The theme choice has to be in force before the first window is drawn,
+        // or it would come up in the system's colours and change under the user.
+        Theme.Choose(settings.Current.Theme);
 
         BrowserWindow? window = null;
-        InternalPages pages = new(history, downloads, BrowserWindow.RevealFile);
+        InternalPages pages = new(history, downloads, settings, bookmarks, BrowserWindow.RevealFile);
 
-        CefSettings settings = new()
+        CefSettings cefSettings = new()
         {
             // Everything Chromium remembers goes in the profile folder, so a
             // portable copy leaves nothing behind on the machine that ran it.
@@ -40,7 +46,7 @@ internal static class Program
             LogSeverity = LogSeverity.Warning,
         };
 
-        settings.RegisterScheme(new CefCustomScheme
+        cefSettings.RegisterScheme(new CefCustomScheme
         {
             SchemeName = InternalPages.Scheme,
 
@@ -57,7 +63,7 @@ internal static class Program
             SchemeHandlerFactory = new InternalSchemeFactory(() => window, pages),
         });
 
-        if (!Cef.Initialize(settings, performDependencyCheck: true, browserProcessHandler: null))
+        if (!Cef.Initialize(cefSettings, performDependencyCheck: true, browserProcessHandler: null))
         {
             MessageBox.Show(
                 "The Chromium engine could not start.",
@@ -67,7 +73,7 @@ internal static class Program
             return 1;
         }
 
-        window = new BrowserWindow(profile, bookmarks, history, downloads, args.FirstOrDefault());
+        window = new BrowserWindow(profile, bookmarks, history, downloads, settings, args.FirstOrDefault());
         using (window)
         {
             Application.Run(window);

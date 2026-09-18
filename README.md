@@ -36,7 +36,9 @@ toolbar are drawn rather than assembled from system controls.
 - [x] A bookmarks bar: each one as wide as its title needs, icons guessed
       from each site's root, the rest behind a chevron, and Ctrl+Shift+B to
       hide it
-- [ ] Settings, including the home page and the search engine
+- [x] Settings at `browser://settings`: home page, search engine including
+      one of your own, light or dark or follow Windows, and clearing what
+      has been kept
 - [ ] Session restore, private windows, find in page
 
 ## What 2.0 has to do at least
@@ -51,8 +53,8 @@ Needs the .NET 9 SDK.
 
 ```
 dotnet build ChromiumBrowser.sln
-dotnet run --project tests/ChromiumBrowser.Tests    # 41 offline checks
-dotnet run --project tests/ChromiumBrowser.UiTests  # 34 user interface checks
+dotnet run --project tests/ChromiumBrowser.Tests    # 58 offline checks
+dotnet run --project tests/ChromiumBrowser.UiTests  # 39 user interface checks
 ```
 
 The user interface checks drive the controls the way a pointer would, without

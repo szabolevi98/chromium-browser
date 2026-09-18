@@ -2,6 +2,7 @@ using ChromiumBrowser.Core;
 using ChromiumBrowser.Core.Data;
 using ChromiumBrowser.Core.Profile;
 using ChromiumBrowser.Core.Ui;
+using ChromiumBrowser.Core.Web;
 
 int failures = 0;
 int total = 0;
@@ -243,6 +244,86 @@ string Scratch()
 
     reopened.Clear();
     Check("downloads: the list can be emptied", new DownloadStore(path).All.Count == 0);
+
+    Directory.Delete(directory, true);
+}
+
+// ----------------------------------------------------------- what was typed
+
+{
+    string google = SearchEngines.Default.Template;
+
+    Check("typed: an address with a scheme is left alone",
+        AddressParser.Parse("https://example.com/a?b=c", google) == "https://example.com/a?b=c");
+    Check("typed: the browser's own pages are addresses too",
+        AddressParser.Parse("browser://history", google) == "browser://history");
+
+    Check("typed: a bare host name gets a scheme",
+        AddressParser.Parse("levente.net", google) == "https://levente.net");
+    Check("typed: so does a host with a path",
+        AddressParser.Parse("levente.net/hu/portfolio", google) == "https://levente.net/hu/portfolio");
+    Check("typed: a local server with a port is an address",
+        AddressParser.Parse("localhost:3000", google) == "https://localhost:3000"
+        && AddressParser.LooksLikeAddress("127.0.0.1:8080"));
+
+    Check("typed: words with a space in them are a search",
+        AddressParser.Parse("nes emulator", google)
+        == "https://www.google.com/search?q=nes%20emulator");
+    Check("typed: a single word with no dot is a search",
+        AddressParser.Parse("wikipedia", google) == "https://www.google.com/search?q=wikipedia");
+    Check("typed: a sentence that happens to contain a dot is still a search",
+        AddressParser.Parse("what is a .ico file", google).StartsWith(
+            "https://www.google.com/search?q=", StringComparison.Ordinal));
+
+    Check("typed: the search goes wherever the settings say",
+        AddressParser.Parse("cats", SearchEngines.ByName("DuckDuckGo").Template)
+        == "https://duckduckgo.com/?q=cats");
+    Check("typed: characters that would break the address are escaped",
+        AddressParser.Parse("c# & f#", google) == "https://www.google.com/search?q=c%23%20%26%20f%23");
+    Check("typed: nothing typed goes nowhere", AddressParser.Parse("   ", google).Length == 0);
+}
+
+// ------------------------------------------------------------------ settings
+
+{
+    string directory = Scratch();
+    string path = Path.Combine(directory, "settings.json");
+
+    SettingsStore settings = new(path);
+    Check("settings: the defaults are a working browser",
+        settings.Current.HomePage.Length > 0
+        && settings.Current.Theme == ThemeChoice.System
+        && settings.Current.SearchTemplate == SearchEngines.Default.Template);
+
+    bool told = false;
+    settings.Changed += (_, _) => told = true;
+    settings.Save(settings.Current with
+    {
+        HomePage = "https://levente.net/",
+        SearchEngine = "DuckDuckGo",
+        Theme = ThemeChoice.Dark,
+        ShowBookmarksBar = false,
+    });
+
+    Check("settings: saving says so, so the window can follow", told);
+    Check("settings: they are still there next time",
+        new SettingsStore(path).Current is
+        {
+            HomePage: "https://levente.net/", SearchEngine: "DuckDuckGo",
+            Theme: ThemeChoice.Dark, ShowBookmarksBar: false,
+        });
+
+    settings.Save(settings.Current with { SearchEngine = "Custom", CustomSearchTemplate = "https://s.test/?q={0}" });
+    Check("settings: a search address of your own is used when it has a place for the words",
+        settings.Current.SearchTemplate == "https://s.test/?q={0}");
+
+    settings.Save(settings.Current with { CustomSearchTemplate = "https://s.test/" });
+    Check("settings: one with nowhere to put the words falls back rather than searching for nothing",
+        settings.Current.SearchTemplate == SearchEngines.Default.Template);
+
+    File.WriteAllText(path, "not settings at all");
+    Check("settings: a damaged file gives the defaults rather than stopping the browser",
+        new SettingsStore(path).Current.HomePage == new Settings().HomePage);
 
     Directory.Delete(directory, true);
 }

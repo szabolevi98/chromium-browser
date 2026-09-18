@@ -167,7 +167,9 @@ internal static class Program
 
         HistoryStore history = new(Path.Combine(directory, "history.json"));
         DownloadStore downloads = new(Path.Combine(directory, "downloads.json"));
-        InternalPages pages = new(history, downloads, _ => { });
+        SettingsStore settings = new(Path.Combine(directory, "settings.json"));
+        BookmarkStore bookmarks = new(Path.Combine(directory, "bookmarks.json"));
+        InternalPages pages = new(history, downloads, settings, bookmarks, _ => { });
 
         DateTimeOffset now = DateTimeOffset.Now;
         history.Record("https://example.com/", "Example Domain", now);
@@ -201,6 +203,28 @@ internal static class Program
         Check("pages: downloads are listed with where they came from",
             shown.Contains("file.zip", StringComparison.Ordinal)
             && shown.Contains("example.com", StringComparison.Ordinal));
+
+        // The settings page is a form, and what it sends back has to land in the
+        // settings rather than merely being shown again.
+        string form = pages.Render(new Uri("browser://settings"));
+        Check("pages: the settings show what is in force",
+            form.Contains("Home page", StringComparison.Ordinal)
+            && form.Contains(settings.Current.HomePage, StringComparison.Ordinal));
+
+        pages.Render(new Uri("browser://settings?save=1&home=https%3A%2F%2Flevente.net%2F&engine=DuckDuckGo&theme=Dark"));
+        Check("pages: saving the form changes the settings",
+            settings.Current is { HomePage: "https://levente.net/", SearchEngine: "DuckDuckGo", Theme: ThemeChoice.Dark },
+            $"got {settings.Current.HomePage}, {settings.Current.SearchEngine}, {settings.Current.Theme}");
+
+        // A form sends nothing at all for a box that is not ticked, so the
+        // absence of the field is what has to turn the bar off.
+        Check("pages: an unticked box is heard as off", !settings.Current.ShowBookmarksBar);
+        pages.Render(new Uri("browser://settings?save=1&bar=1"));
+        Check("pages: and a ticked one as on", settings.Current.ShowBookmarksBar);
+
+        history.Record("https://example.com/", "Example", DateTimeOffset.Now);
+        pages.Render(new Uri("browser://settings?forget=history"));
+        Check("pages: clearing from the settings empties the history", history.All.Count == 0);
 
         Check("pages: an address with no page behind it says so",
             pages.Render(new Uri("browser://nowhere")).Contains("no such page", StringComparison.Ordinal));

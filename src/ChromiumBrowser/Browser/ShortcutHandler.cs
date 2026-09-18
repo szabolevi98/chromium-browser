@@ -19,6 +19,7 @@ public enum BrowserCommand
     ShowHistory,
     ShowDownloads,
     ToggleBookmarksBar,
+    ShowSettings,
 }
 
 /// <summary>
