@@ -6,6 +6,7 @@ using ChromiumBrowser.Controls;
 using ChromiumBrowser.Core;
 using ChromiumBrowser.Core.Data;
 using ChromiumBrowser.Core.Profile;
+using ChromiumBrowser.Core.Web;
 using ChromiumBrowser.Native;
 using ChromiumBrowser.Ui;
 
@@ -53,17 +54,19 @@ public sealed class BrowserWindow : Form
     /// <summary>Icons for the bookmarks bar, guessed from each site's root.</summary>
     private readonly Dictionary<string, Image?> _bookmarkIcons = new(StringComparer.OrdinalIgnoreCase);
 
-    private bool _showBookmarksBar = true;
     private readonly HistoryStore _history;
     private readonly DownloadStore _downloads;
+    private readonly SettingsStore _settings;
 
     public BrowserWindow(
         ProfileLocation profile,
         BookmarkStore bookmarks,
         HistoryStore history,
         DownloadStore downloads,
+        SettingsStore settings,
         string? startUrl)
     {
+        _settings = settings;
         _profile = profile;
         _bookmarks = bookmarks;
         _history = history;
@@ -92,7 +95,14 @@ public sealed class BrowserWindow : Form
         _toolbar.ReloadRequested += (_, _) => Selected?.Reload();
         _toolbar.StopRequested += (_, _) => Selected?.Stop();
         _toolbar.HomeRequested += (_, _) => Selected?.LoadUrl(HomePage);
-        _toolbar.Navigated += (_, typed) => Selected?.LoadUrl(AsUrl(typed));
+        _toolbar.Navigated += (_, typed) =>
+        {
+            string url = AddressParser.Parse(typed, _settings.Current.SearchTemplate, InternalPages.Scheme);
+            if (url.Length > 0)
+            {
+                Selected?.LoadUrl(url);
+            }
+        };
         _toolbar.MenuRequested += (_, at) => ShowMenu(_toolbar.PointToScreen(at));
 
         _bookmarksBar.IconFor = BookmarkIcon;
@@ -107,12 +117,12 @@ public sealed class BrowserWindow : Form
         Controls.Add(_captionButtons);
 
         Theme.Changed += OnThemeChanged;
+        _settings.Changed += OnSettingsChanged;
 
         OpenTab(startUrl ?? HomePage);
     }
 
-    /// <summary>Until there are settings to read it from.</summary>
-    private static string HomePage => "https://www.google.com/";
+    private string HomePage => _settings.Current.HomePage;
 
     private ChromiumWebBrowser? Selected =>
         _tabStrip.SelectedIndex >= 0 && _tabStrip.SelectedIndex < _browsers.Count
@@ -318,9 +328,13 @@ public sealed class BrowserWindow : Form
             case BrowserCommand.ZoomReset: Zoom(null); break;
             case BrowserCommand.BookmarkPage: ToggleBookmark(); break;
             case BrowserCommand.ToggleBookmarksBar:
-                _showBookmarksBar = !_showBookmarksBar;
-                PerformLayout();
+                _settings.Save(_settings.Current with
+                {
+                    ShowBookmarksBar = !_settings.Current.ShowBookmarksBar,
+                });
                 break;
+
+            case BrowserCommand.ShowSettings: OpenTab($"{InternalPages.Scheme}://settings"); break;
             case BrowserCommand.ShowHistory: OpenTab($"{InternalPages.Scheme}://history"); break;
             case BrowserCommand.ShowDownloads: OpenTab($"{InternalPages.Scheme}://downloads"); break;
         }
@@ -505,6 +519,8 @@ public sealed class BrowserWindow : Form
         menu.Items.Add(new ToolStripSeparator());
         Item("Print...", "Ctrl+P", () => Selected?.Print());
         menu.Items.Add(new ToolStripSeparator());
+        Item("Settings", string.Empty, () => OpenTab($"{InternalPages.Scheme}://settings"));
+        menu.Items.Add(new ToolStripSeparator());
         Item($"About {Branding.Name}", string.Empty, ShowAbout);
         Item("Exit", string.Empty, Close);
 
@@ -556,29 +572,6 @@ public sealed class BrowserWindow : Form
         about.ShowDialog(this);
     }
 
-    /// <summary>
-    /// What to do with what was typed. Anything that parses as an address is one;
-    /// anything else is a search, which is why a browser's address bar is the
-    /// only text field people trust to take either.
-    /// </summary>
-    private static string AsUrl(string typed)
-    {
-        if (typed.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
-            || typed.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
-            || typed.StartsWith("file://", StringComparison.OrdinalIgnoreCase)
-            || typed.StartsWith($"{InternalPages.Scheme}://", StringComparison.OrdinalIgnoreCase))
-        {
-            return typed;
-        }
-
-        bool looksLikeHost = !typed.Contains(' ')
-            && (typed.Contains('.') || typed.StartsWith("localhost", StringComparison.OrdinalIgnoreCase));
-
-        return looksLikeHost
-            ? "https://" + typed
-            : "https://www.google.com/search?q=" + Uri.EscapeDataString(typed);
-    }
-
     private void OnUiThread(Action action)
     {
         if (IsDisposed || !IsHandleCreated)
@@ -625,7 +618,7 @@ public sealed class BrowserWindow : Form
 
         // The bar is only there when there is something on it; an empty strip of
         // chrome above every page is the sort of thing browsers used to do.
-        bool bar = _showBookmarksBar && _bookmarks.All.Count > 0;
+        bool bar = _settings.Current.ShowBookmarksBar && _bookmarks.All.Count > 0;
         int barHeight = bar ? Dip(BookmarksBarHeight) : 0;
         _bookmarksBar.Visible = bar;
         _bookmarksBar.SetBounds(0, top + caption + toolbar, ClientSize.Width, barHeight);
@@ -649,6 +642,12 @@ public sealed class BrowserWindow : Form
 
         int dark = Theme.IsDark ? 1 : 0;
         Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_USE_IMMERSIVE_DARK_MODE, ref dark, sizeof(int));
+    }
+
+    private void OnSettingsChanged(object? sender, EventArgs e)
+    {
+        Theme.Choose(_settings.Current.Theme);
+        RefreshBookmarks();
     }
 
     private void OnThemeChanged(object? sender, EventArgs e)

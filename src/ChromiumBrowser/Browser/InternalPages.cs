@@ -25,14 +25,26 @@ public sealed class InternalPages
 {
     public const string Scheme = "browser";
 
+    /// <summary>Where the words go in a search address, as text rather than as a format.</summary>
+    private const string WordsPlaceholder = "{0}";
+
     private readonly HistoryStore _history;
     private readonly DownloadStore _downloads;
+    private readonly SettingsStore _settings;
+    private readonly BookmarkStore _bookmarks;
     private readonly Action<string> _reveal;
 
-    public InternalPages(HistoryStore history, DownloadStore downloads, Action<string> reveal)
+    public InternalPages(
+        HistoryStore history,
+        DownloadStore downloads,
+        SettingsStore settings,
+        BookmarkStore bookmarks,
+        Action<string> reveal)
     {
         _history = history;
         _downloads = downloads;
+        _settings = settings;
+        _bookmarks = bookmarks;
         _reveal = reveal;
     }
 
@@ -46,6 +58,7 @@ public sealed class InternalPages
         {
             "history" => History(query),
             "downloads" => Downloads(query),
+            "settings" => SettingsPage(query),
             _ => Document("Not found", "<p class=\"empty\">There is no such page.</p>"),
         };
     }
@@ -166,6 +179,106 @@ public sealed class InternalPages
         return Document("Downloads", body.ToString());
     }
 
+    private string SettingsPage(Dictionary<string, string> query)
+    {
+        string saved = string.Empty;
+
+        if (query.ContainsKey("save"))
+        {
+            // A form sends nothing at all for an unticked box, so the presence of
+            // the marker is what says the form was sent, and the absence of the
+            // box is what says it was unticked.
+            Settings current = _settings.Current;
+            _settings.Save(current with
+            {
+                HomePage = query.GetValueOrDefault("home", current.HomePage).Trim(),
+                SearchEngine = query.GetValueOrDefault("engine", current.SearchEngine),
+                CustomSearchTemplate = query.GetValueOrDefault("custom", current.CustomSearchTemplate).Trim(),
+                Theme = Enum.TryParse(query.GetValueOrDefault("theme"), true, out ThemeChoice theme)
+                    ? theme
+                    : current.Theme,
+                ShowBookmarksBar = query.ContainsKey("bar"),
+            });
+
+            saved = "<p class=\"saved\">Saved.</p>";
+        }
+
+        if (query.TryGetValue("forget", out string? what))
+        {
+            switch (what)
+            {
+                case "history": _history.ClearAll(); break;
+                case "downloads": _downloads.Clear(); break;
+            }
+
+            saved = "<p class=\"saved\">Cleared.</p>";
+        }
+
+        Settings settings = _settings.Current;
+
+        StringBuilder engines = new();
+        foreach (SearchEngine engine in SearchEngines.All)
+        {
+            engines.Append($"<option value=\"{Escape(engine.Name)}\"{Selected(engine.Name, settings.SearchEngine)}>"
+                + $"{Escape(engine.Name)}</option>");
+        }
+
+        engines.Append($"<option value=\"Custom\"{Selected("Custom", settings.SearchEngine)}>Something else</option>");
+
+        string body = $"""
+            <h1>Settings</h1>
+            {saved}
+            <form method="get" action="{Scheme}://settings">
+              <input type="hidden" name="save" value="1">
+
+              <section>
+                <label for="home">Home page</label>
+                <input id="home" class="field" type="text" name="home" value="{Escape(settings.HomePage)}">
+                <p class="hint">Where the home button and every new tab go.</p>
+              </section>
+
+              <section>
+                <label for="engine">Search with</label>
+                <select id="engine" class="field" name="engine">{engines}</select>
+                <input class="field" type="text" name="custom" placeholder="https://example.com/?q={WordsPlaceholder}"
+                       value="{Escape(settings.CustomSearchTemplate)}">
+                <p class="hint">Anything typed in the bar that is not an address is searched for.
+                   An address of your own needs {WordsPlaceholder} where the words go.</p>
+              </section>
+
+              <section>
+                <label for="theme">Appearance</label>
+                <select id="theme" class="field" name="theme">
+                  <option value="System"{Selected("System", settings.Theme.ToString())}>Follow Windows</option>
+                  <option value="Light"{Selected("Light", settings.Theme.ToString())}>Light</option>
+                  <option value="Dark"{Selected("Dark", settings.Theme.ToString())}>Dark</option>
+                </select>
+                <label class="tick"><input type="checkbox" name="bar" value="1"
+                  {(settings.ShowBookmarksBar ? "checked" : string.Empty)}> Show the bookmarks bar</label>
+              </section>
+
+              <button class="button primary" type="submit">Save</button>
+            </form>
+
+            <section>
+              <label>Clear</label>
+              <p class="hint">{Count(_history.All.Count, "page")} in history,
+                 {Count(_bookmarks.All.Count, "bookmark")} kept.</p>
+              <a class="button" href="{Scheme}://settings?forget=history">Clear history</a>
+              <a class="button" href="{Scheme}://settings?forget=downloads">Clear the download list</a>
+            </section>
+            """;
+
+        return Document("Settings", body);
+    }
+
+    /// <summary>"1 page" rather than "1 pages", which is the sort of thing people notice.</summary>
+    private static string Count(int number, string noun) =>
+        number == 1 ? $"1 {noun}" : $"{number} {noun}s";
+
+    private static string Selected(string value, string current) =>
+        string.Equals(value, current, StringComparison.OrdinalIgnoreCase) ? " selected" : string.Empty;
+
     /// <summary>
     /// The page around the content, in the colours the window is using. An
     /// internal page that stays white when the browser is dark is worse than no
@@ -208,6 +321,10 @@ public sealed class InternalPages
               }
               .search:focus { border-color: var(--accent); }
               .button, .link {
+                /* Inline by default, and an inline box's padding does not push
+                   the line apart, so the buttons would sit on top of the text
+                   above them. */
+                display: inline-block; margin-top: 6px;
                 padding: 9px 16px; border-radius: 999px; border: 1px solid var(--line);
                 background: var(--card); color: var(--text); text-decoration: none; white-space: nowrap;
               }
@@ -231,6 +348,22 @@ public sealed class InternalPages
               .list a:hover { text-decoration: underline; text-decoration-color: var(--accent); }
               .list li > a:first-of-type { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
               .empty { color: var(--muted); padding: 40px 0; }
+              section { margin: 0 0 28px; }
+              /* What follows the form is a different subject, and a rule says so. */
+              form + section { margin-top: 36px; padding-top: 28px; border-top: 1px solid var(--line); }
+              label { display: block; font-weight: 600; margin-bottom: 8px; }
+              .field {
+                width: 100%; max-width: 520px; padding: 10px 14px; margin-bottom: 8px;
+                border-radius: 10px; border: 1px solid var(--line); background: var(--card);
+                color: var(--text); font: inherit; outline: none;
+              }
+              .field:focus { border-color: var(--accent); }
+              .hint { color: var(--muted); margin: 6px 0 0; font-size: 13px; max-width: 520px; }
+              .tick { font-weight: 400; display: flex; gap: 8px; align-items: center; margin-top: 12px; }
+              .tick input { accent-color: var(--accent); }
+              button.button { cursor: pointer; font: inherit; }
+              .primary { border-color: var(--accent); }
+              .saved { color: var(--accent); margin: -10px 0 18px; }
               .link { font-size: 13px; padding: 6px 12px; }
             </style>
             </head>
