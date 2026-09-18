@@ -9,6 +9,7 @@ using ChromiumBrowser.Core.Profile;
 using ChromiumBrowser.Core.Web;
 using ChromiumBrowser.Native;
 using ChromiumBrowser.Ui;
+using ChromiumBrowser.Core.Localisation;
 
 namespace ChromiumBrowser;
 
@@ -147,7 +148,7 @@ public sealed class BrowserWindow : Form
                 return;
             }
 
-            _tabStrip.Tabs[at].Title = string.IsNullOrWhiteSpace(e.Title) ? "New tab" : e.Title;
+            _tabStrip.Tabs[at].Title = string.IsNullOrWhiteSpace(e.Title) ? Strings.Of("tab.new") : e.Title;
             _tabStrip.Refresh(at);
             if (at == _tabStrip.SelectedIndex)
             {
@@ -224,7 +225,7 @@ public sealed class BrowserWindow : Form
         _browsers.Add(browser);
         _pages.Controls.Add(browser);
         browser.CreateControl();
-        _tabStrip.AddTab(new TabItem { Title = "New tab", IsLoading = true });
+        _tabStrip.AddTab(new TabItem { Title = Strings.Of("tab.new"), IsLoading = true });
         ShowSelectedPage();
     }
 
@@ -384,7 +385,7 @@ public sealed class BrowserWindow : Form
                 break;
 
             case BookmarkAction.Rename:
-                using (PromptForm prompt = new("Rename bookmark", "Name", bookmark.Title))
+                using (PromptForm prompt = new(Strings.Of("bookmark.renameTitle"), Strings.Of("bookmark.name"), bookmark.Title))
                 {
                     if (prompt.ShowDialog(this) == DialogResult.OK && prompt.Value.Length > 0)
                     {
@@ -502,27 +503,27 @@ public sealed class BrowserWindow : Form
                 ShortcutKeyDisplayString = keys,
             });
 
-        Item("New tab", "Ctrl+T", () => OpenTab(HomePage));
-        Item("Close tab", "Ctrl+W", () => CloseTab(_tabStrip.SelectedIndex));
+        Item(Strings.Of("menu.newTab"), "Ctrl+T", () => OpenTab(HomePage));
+        Item(Strings.Of("menu.closeTab"), "Ctrl+W", () => CloseTab(_tabStrip.SelectedIndex));
         menu.Items.Add(new ToolStripSeparator());
 
         string? here = Selected?.Address;
         bool kept = here is not null && _bookmarks.Contains(here);
-        Item(kept ? "Remove bookmark" : "Bookmark this page", "Ctrl+D", ToggleBookmark);
-        menu.Items.Add(Submenu("Bookmarks", _bookmarks.All.Select(b => (b.Title, b.Url))));
-        Item("History", "Ctrl+H", () => OpenTab($"{InternalPages.Scheme}://history"));
-        Item("Downloads", "Ctrl+J", () => OpenTab($"{InternalPages.Scheme}://downloads"));
+        Item(Strings.Of(kept ? "menu.unbookmark" : "menu.bookmark"), "Ctrl+D", ToggleBookmark);
+        menu.Items.Add(Submenu(Strings.Of("menu.bookmarks"), _bookmarks.All.Select(b => (b.Title, b.Url))));
+        Item(Strings.Of("menu.history"), "Ctrl+H", () => OpenTab($"{InternalPages.Scheme}://history"));
+        Item(Strings.Of("menu.downloads"), "Ctrl+J", () => OpenTab($"{InternalPages.Scheme}://downloads"));
         menu.Items.Add(new ToolStripSeparator());
-        Item("Zoom in", "Ctrl+Plus", () => Zoom(0.5));
-        Item("Zoom out", "Ctrl+Minus", () => Zoom(-0.5));
-        Item("Reset zoom", "Ctrl+0", () => Zoom(null));
+        Item(Strings.Of("menu.zoomIn"), "Ctrl+Plus", () => Zoom(0.5));
+        Item(Strings.Of("menu.zoomOut"), "Ctrl+Minus", () => Zoom(-0.5));
+        Item(Strings.Of("menu.zoomReset"), "Ctrl+0", () => Zoom(null));
         menu.Items.Add(new ToolStripSeparator());
-        Item("Print...", "Ctrl+P", () => Selected?.Print());
+        Item(Strings.Of("menu.print"), "Ctrl+P", () => Selected?.Print());
         menu.Items.Add(new ToolStripSeparator());
-        Item("Settings", string.Empty, () => OpenTab($"{InternalPages.Scheme}://settings"));
+        Item(Strings.Of("menu.settings"), string.Empty, () => OpenTab($"{InternalPages.Scheme}://settings"));
         menu.Items.Add(new ToolStripSeparator());
-        Item($"About {Branding.Name}", string.Empty, ShowAbout);
-        Item("Exit", string.Empty, Close);
+        Item($"{Strings.Of("menu.about")} {Branding.Name}", string.Empty, ShowAbout);
+        Item(Strings.Of("menu.exit"), string.Empty, Close);
 
         menu.Closed += (_, _) => menu.Dispose();
         menu.Show(screen);
@@ -542,7 +543,7 @@ public sealed class BrowserWindow : Form
 
         if (parent.DropDownItems.Count == 0)
         {
-            parent.DropDownItems.Add(new ToolStripMenuItem("Nothing yet") { Enabled = false });
+            parent.DropDownItems.Add(new ToolStripMenuItem(Strings.Of("menu.empty")) { Enabled = false });
         }
 
         parent.DropDown.Renderer = new MenuRenderer();
@@ -646,8 +647,26 @@ public sealed class BrowserWindow : Form
 
     private void OnSettingsChanged(object? sender, EventArgs e)
     {
+        Strings.Use(_settings.Current.Language);
         Theme.Choose(_settings.Current.Theme);
         RefreshBookmarks();
+        ReloadInternalPages();
+    }
+
+    /// <summary>
+    /// The browser's own pages are drawn in the colours and the language in
+    /// force when they were asked for, so a change to either leaves any that are
+    /// open out of date until they are fetched again.
+    /// </summary>
+    private void ReloadInternalPages()
+    {
+        foreach (ChromiumWebBrowser browser in _browsers)
+        {
+            if (browser.Address?.StartsWith($"{InternalPages.Scheme}://", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                browser.Reload();
+            }
+        }
     }
 
     private void OnThemeChanged(object? sender, EventArgs e)
@@ -656,6 +675,7 @@ public sealed class BrowserWindow : Form
         _toolbar.ApplyTheme();
         ApplyWindowStyling();
         Invalidate(true);
+        ReloadInternalPages();
     }
 
     private void ToggleMaximise() =>

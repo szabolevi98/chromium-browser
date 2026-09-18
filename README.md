@@ -39,6 +39,8 @@ toolbar are drawn rather than assembled from system controls.
 - [x] Settings at `browser://settings`: home page, search engine including
       one of your own, light or dark or follow Windows, and clearing what
       has been kept
+- [x] English and Hungarian, switched in the settings, with a check that
+      nothing was left untranslated
 - [ ] Session restore, private windows, find in page
 
 ## What 2.0 has to do at least
@@ -53,8 +55,8 @@ Needs the .NET 9 SDK.
 
 ```
 dotnet build ChromiumBrowser.sln
-dotnet run --project tests/ChromiumBrowser.Tests    # 58 offline checks
-dotnet run --project tests/ChromiumBrowser.UiTests  # 39 user interface checks
+dotnet run --project tests/ChromiumBrowser.Tests    # 65 offline checks
+dotnet run --project tests/ChromiumBrowser.UiTests  # 41 user interface checks
 ```
 
 The user interface checks drive the controls the way a pointer would, without

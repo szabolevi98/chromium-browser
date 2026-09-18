@@ -1,5 +1,6 @@
 using ChromiumBrowser.Core;
 using ChromiumBrowser.Core.Data;
+using ChromiumBrowser.Core.Localisation;
 using ChromiumBrowser.Core.Profile;
 using ChromiumBrowser.Core.Ui;
 using ChromiumBrowser.Core.Web;
@@ -326,6 +327,41 @@ string Scratch()
         new SettingsStore(path).Current.HomePage == new Settings().HomePage);
 
     Directory.Delete(directory, true);
+}
+
+// ---------------------------------------------------------------- language
+
+{
+    Check("language: every phrase exists in both languages",
+        Strings.All.Values.All(p => p.English.Length > 0 && p.Hungarian.Length > 0),
+        string.Join(", ", Strings.All.Where(p => p.Value.Hungarian.Length == 0).Select(p => p.Key)));
+
+    // A phrase copied across untranslated is the usual way a translation rots,
+    // and the few that are the same in both languages are known by name.
+    string[] sameInBoth = ["button.ok"];
+    string[] untranslated = Strings.All
+        .Where(p => p.Value.English == p.Value.Hungarian && !sameInBoth.Contains(p.Key))
+        .Select(p => p.Key)
+        .ToArray();
+    Check("language: nothing was left in English by accident",
+        untranslated.Length == 0, string.Join(", ", untranslated));
+
+    Strings.Use("hu");
+    Check("language: Hungarian is what comes out", Strings.Of("menu.newTab") == "Új lap");
+    Check("language: and the browser knows which it is in", Strings.IsHungarian);
+
+    Strings.Use("fr");
+    Check("language: a language there is no translation for is English",
+        !Strings.IsHungarian && Strings.Of("menu.newTab") == "New tab");
+
+    Check("language: a phrase nobody has written yet shows its name rather than nothing",
+        Strings.Of("nothing.like.this") == "nothing.like.this");
+
+    bool told = false;
+    Strings.Changed += (_, _) => told = true;
+    Strings.Use("hu");
+    Check("language: changing it says so, so what is on screen can be redrawn", told);
+    Strings.Use("en");
 }
 
 Console.WriteLine();

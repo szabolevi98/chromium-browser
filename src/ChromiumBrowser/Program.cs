@@ -5,6 +5,7 @@ using ChromiumBrowser.Core;
 using ChromiumBrowser.Core.Data;
 using ChromiumBrowser.Core.Profile;
 using ChromiumBrowser.Ui;
+using ChromiumBrowser.Core.Localisation;
 
 namespace ChromiumBrowser;
 
@@ -28,6 +29,8 @@ internal static class Program
         HistoryStore history = new(Path.Combine(profile.Path, "history.json"));
         DownloadStore downloads = new(Path.Combine(profile.Path, "downloads.json"));
         SettingsStore settings = new(Path.Combine(profile.Path, "settings.json"));
+
+        Strings.Use(settings.Current.Language);
 
         // The theme choice has to be in force before the first window is drawn,
         // or it would come up in the system's colours and change under the user.
@@ -66,7 +69,7 @@ internal static class Program
         if (!Cef.Initialize(cefSettings, performDependencyCheck: true, browserProcessHandler: null))
         {
             MessageBox.Show(
-                "The Chromium engine could not start.",
+                Strings.Of("error.engine"),
                 Branding.Name,
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);

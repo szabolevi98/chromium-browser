@@ -1,6 +1,7 @@
 using System.Drawing.Drawing2D;
 using ChromiumBrowser.Core.Data;
 using ChromiumBrowser.Ui;
+using ChromiumBrowser.Core.Localisation;
 
 namespace ChromiumBrowser.Controls;
 
@@ -209,11 +210,11 @@ public sealed class BookmarksBarControl : Control
             menu.Items.Add(new ToolStripMenuItem(text, null, (_, _) =>
                 Requested?.Invoke(this, (bookmark, action))));
 
-        Item("Open", BookmarkAction.Open);
-        Item("Open in a new tab", BookmarkAction.OpenInNewTab);
+        Item(Strings.Of("bookmark.open"), BookmarkAction.Open);
+        Item(Strings.Of("bookmark.openNewTab"), BookmarkAction.OpenInNewTab);
         menu.Items.Add(new ToolStripSeparator());
-        Item("Rename...", BookmarkAction.Rename);
-        Item("Remove", BookmarkAction.Remove);
+        Item(Strings.Of("bookmark.rename"), BookmarkAction.Rename);
+        Item(Strings.Of("bookmark.remove"), BookmarkAction.Remove);
 
         menu.Closed += (_, _) => menu.Dispose();
         menu.Show(this, at);

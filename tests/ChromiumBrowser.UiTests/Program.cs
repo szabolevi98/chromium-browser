@@ -2,6 +2,7 @@ using System.Reflection;
 using ChromiumBrowser.Browser;
 using ChromiumBrowser.Controls;
 using ChromiumBrowser.Core.Data;
+using ChromiumBrowser.Core.Localisation;
 using ChromiumBrowser.Core.Ui;
 
 namespace ChromiumBrowser.UiTests;
@@ -225,6 +226,20 @@ internal static class Program
         history.Record("https://example.com/", "Example", DateTimeOffset.Now);
         pages.Render(new Uri("browser://settings?forget=history"));
         Check("pages: clearing from the settings empties the history", history.All.Count == 0);
+
+        // The pages are drawn in whichever language is in force, title included:
+        // a tab labelled "Settings" above a Hungarian page is the giveaway that
+        // one string was missed.
+        Strings.Use("hu");
+        string hungarian = pages.Render(new Uri("browser://settings"));
+        Check("pages: the settings speak the language that was chosen",
+            hungarian.Contains("Kezdőlap", StringComparison.Ordinal)
+            && hungarian.Contains("<title>Beállítások</title>", StringComparison.Ordinal),
+            hungarian.Contains("Kezdőlap", StringComparison.Ordinal) ? "the title was missed" : "the page was missed");
+
+        Check("pages: so does the history page",
+            pages.Render(new Uri("browser://history")).Contains("Előzmények", StringComparison.Ordinal));
+        Strings.Use("en");
 
         Check("pages: an address with no page behind it says so",
             pages.Render(new Uri("browser://nowhere")).Contains("no such page", StringComparison.Ordinal));
