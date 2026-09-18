@@ -14,8 +14,10 @@ namespace ChromiumBrowser.Ui;
 /// rather than from this program.
 ///
 /// The bytes may be a PNG, a GIF, or a Windows icon file with several sizes in
-/// it, so both decoders are tried. Anything that decodes to neither is simply a
-/// tab without an icon.
+/// it, so both decoders are tried. What cannot be drawn is usually an SVG —
+/// GitHub and plenty of others name one now — and for those the site's own
+/// <c>/favicon.ico</c> is asked for instead, which those same sites still keep.
+/// Anything that decodes to neither is simply a tab without an icon.
 /// </summary>
 public static class FaviconCache
 {
@@ -56,8 +58,34 @@ public static class FaviconCache
         }
 
         Image? icon = await DownloadAsync(url).ConfigureAwait(false);
+
+        // The page named something this program cannot draw. Nearly every site
+        // that does that still answers the old address, so it is worth one more
+        // request before giving up on the icon.
+        if (icon is null && RootIcon(url) is { } fallback)
+        {
+            icon = await DownloadAsync(fallback).ConfigureAwait(false);
+        }
+
         Icons[url] = icon;
         return icon;
+    }
+
+    /// <summary>
+    /// The address every site used to keep its icon at, for a site whose named
+    /// icon could not be used. Nothing for an address that is already it, so a
+    /// site without one is asked once rather than twice.
+    /// </summary>
+    public static string? RootIcon(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out Uri? address)
+            || (address.Scheme != Uri.UriSchemeHttp && address.Scheme != Uri.UriSchemeHttps))
+        {
+            return null;
+        }
+
+        string root = $"{address.Scheme}://{address.Authority}/favicon.ico";
+        return string.Equals(root, url, StringComparison.OrdinalIgnoreCase) ? null : root;
     }
 
     private static async Task<Image?> DownloadAsync(string url)
