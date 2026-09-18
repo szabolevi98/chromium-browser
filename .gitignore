@@ -340,3 +340,7 @@ ASALocalRun/
 healthchecksdb
 # Build output of the portable package
 publish/
+
+# The release artifacts, built by hand and uploaded rather than committed.
+/ChromiumBrowser-*-win-x64.zip
+/SHA256SUMS.txt
