@@ -39,7 +39,7 @@ internal static class Program
             return 1;
         }
 
-        using MainForm window = new(profile, args.FirstOrDefault());
+        using BrowserWindow window = new(profile, args.FirstOrDefault());
         Application.Run(window);
         return 0;
     }
