@@ -33,6 +33,7 @@ internal static class Program
         CheckInternalPages();
         CheckBookmarksBar();
         CheckFindBar();
+        CheckFavicons();
         CheckMenu();
         CheckPrivateBadge();
         CheckPrivatePage();
@@ -404,6 +405,30 @@ internal static class Program
 
         Check("find bar: it starts hidden, so a window that never searches never shows it",
             !new FindBarControl().Visible);
+    }
+
+    private static void CheckFavicons()
+    {
+        // A page that names an icon this program cannot draw — an SVG, which is
+        // what GitHub and plenty of others name now — falls back to the address
+        // every site used to keep its icon at.
+        Check("favicon: an icon that cannot be drawn falls back to the site's own",
+            FaviconCache.RootIcon("https://github.com/favicons/favicon-dark.svg")
+                == "https://github.com/favicon.ico",
+            FaviconCache.RootIcon("https://github.com/favicons/favicon-dark.svg") ?? "nothing");
+
+        Check("favicon: the port is part of the site, so a test server keeps its own",
+            FaviconCache.RootIcon("http://localhost:8080/assets/icon.svg")
+                == "http://localhost:8080/favicon.ico");
+
+        // Asking twice for the same address is one wasted request per site that
+        // simply has no icon.
+        Check("favicon: an address that is already the fallback is not asked for twice",
+            FaviconCache.RootIcon("https://example.com/favicon.ico") is null);
+
+        Check("favicon: an address that is not a page's is nothing to ask for",
+            FaviconCache.RootIcon("data:image/png;base64,iVBORw0KGgo=") is null
+            && FaviconCache.RootIcon("not an address at all") is null);
     }
 
     private static void CheckMenu()
