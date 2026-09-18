@@ -392,24 +392,24 @@ internal static class Program
         Check("menu: an entry carries the keys that do the same thing",
             menu.Items[0] is ToolStripMenuItem { ShortcutKeyDisplayString: "Ctrl+J" });
 
-        owner.Location = new Point(300, 200);
+        // The window where the menu button actually lives: against the right
+        // edge of the screen, with the button in its top-right corner. This is
+        // the case that sent the menu onto the second monitor.
+        Rectangle screen = Screen.PrimaryScreen!.WorkingArea;
         owner.Size = new Size(600, 400);
+        owner.Location = new Point(screen.Right - owner.Width, screen.Top + 100);
 
-        Point under = new(120, 60);
-        menu.ShowAt(owner, under);
+        Point button = new(owner.Width - 10, 40);
+        menu.ShowAt(owner, button);
 
-        // Where it actually opened. A menu placed from a point worked out in
-        // screen coordinates lands on the wrong monitor once a second screen is
-        // scaled differently; asked for relative to the control, it lands on the
-        // control.
-        Point wanted = owner.PointToScreen(under);
-        Check("menu: it opens where it was asked to, next to the button",
-            Math.Abs(menu.Bounds.X - wanted.X) < 40 && Math.Abs(menu.Bounds.Y - wanted.Y) < 40,
-            $"asked for {wanted}, opened at {menu.Bounds.Location}");
+        Point corner = owner.PointToScreen(button);
+        Check("menu: it hangs down and to the left of the button",
+            Math.Abs(menu.Bounds.Right - corner.X) < 40 && Math.Abs(menu.Bounds.Y - corner.Y) < 40,
+            $"button at {corner}, menu at {menu.Bounds}");
 
-        Check("menu: on the screen the window is on",
-            Screen.FromControl(owner).Bounds.Contains(menu.Bounds.Location),
-            $"{menu.Bounds.Location} is not on {Screen.FromControl(owner).DeviceName}");
+        Check("menu: and stays on the screen the window is on",
+            screen.Contains(menu.Bounds),
+            $"{menu.Bounds} is not inside {screen}");
 
         // Windows Forms closes the menu before it dispatches the click, so a menu
         // thrown away on Closed takes the click with it — which is what made
