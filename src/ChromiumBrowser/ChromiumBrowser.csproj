@@ -22,6 +22,10 @@
          the runtime is what flattens them beside the executable. -->
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>false</SelfContained>
+    <!-- Without this the binaries land in a win-x64 folder inside the output,
+         and the solution and the project disagree about where the program is.
+         An hour was lost to running a stale copy. -->
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationUseCompatibleTextRendering>false</ApplicationUseCompatibleTextRendering>
     <Version>2.0.0</Version>

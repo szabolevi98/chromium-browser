@@ -75,6 +75,9 @@ public sealed class ToolbarControl : Control
     /// <summary>Something was typed into the bar and entered.</summary>
     public event EventHandler<string>? Navigated;
 
+    /// <summary>The menu button was pressed; the point is where to open the menu.</summary>
+    public event EventHandler<Point>? MenuRequested;
+
     public bool CanGoBack { get; set; }
 
     public bool CanGoForward { get; set; }
@@ -118,13 +121,24 @@ public sealed class ToolbarControl : Control
             ButtonSize,
             ButtonSize);
 
+    /// <summary>The menu sits at the far right, where every browser keeps it.</summary>
+    private Rectangle MenuRect
+    {
+        get
+        {
+            int size = ButtonSize;
+            return new Rectangle(Width - size - (int)(6 * UiScale), (Height - size) / 2, size, size);
+        }
+    }
+
     private Rectangle AddressRect
     {
         get
         {
             int left = ButtonRect(3).Right + (int)(8 * UiScale);
+            int right = MenuRect.Left - (int)(8 * UiScale);
             int height = (int)(30 * UiScale);
-            return new Rectangle(left, (Height - height) / 2, Math.Max(0, Width - left - (int)(8 * UiScale)), height);
+            return new Rectangle(left, (Height - height) / 2, Math.Max(0, right - left), height);
         }
     }
 
@@ -151,6 +165,11 @@ public sealed class ToolbarControl : Control
                 hover = index;
                 break;
             }
+        }
+
+        if (hover < 0 && MenuRect.Contains(e.Location))
+        {
+            hover = MenuButton;
         }
 
         if (hover != _hover)
@@ -185,6 +204,9 @@ public sealed class ToolbarControl : Control
             case 2 when IsLoading: StopRequested?.Invoke(this, EventArgs.Empty); break;
             case 2: ReloadRequested?.Invoke(this, EventArgs.Empty); break;
             case 3: HomeRequested?.Invoke(this, EventArgs.Empty); break;
+            case MenuButton:
+                MenuRequested?.Invoke(this, new Point(MenuRect.Left, MenuRect.Bottom));
+                break;
         }
     }
 
@@ -199,6 +221,7 @@ public sealed class ToolbarControl : Control
         DrawButton(g, palette, 1, CanGoForward);
         DrawButton(g, palette, 2, enabled: true);
         DrawButton(g, palette, 3, enabled: true);
+        DrawMenuButton(g, palette);
 
         Rectangle bar = AddressRect;
         using GraphicsPath path = Rounded(bar, bar.Height / 2);
@@ -206,6 +229,32 @@ public sealed class ToolbarControl : Control
         g.FillPath(fill, path);
         using Pen line = new(_address.Focused ? palette.Accent : palette.Line, _address.Focused ? 1.4f * UiScale : 1f);
         g.DrawPath(line, path);
+    }
+
+    /// <summary>The index the menu button answers to, kept away from the other four.</summary>
+    private const int MenuButton = 9;
+
+    /// <summary>Three dots, which is what a browser menu looks like everywhere.</summary>
+    private void DrawMenuButton(Graphics g, Palette palette)
+    {
+        Rectangle rect = MenuRect;
+        if (_hover == MenuButton)
+        {
+            using SolidBrush hover = new(palette.Hover);
+            using GraphicsPath path = Rounded(rect, (int)(8 * UiScale));
+            g.FillPath(hover, path);
+        }
+
+        using SolidBrush brush = new(palette.Text);
+        int dot = Math.Max(2, (int)(3 * UiScale));
+        int x = rect.X + ((rect.Width - dot) / 2);
+        int gap = (int)(5 * UiScale);
+        int y = rect.Y + (rect.Height / 2) - gap - (dot / 2);
+
+        for (int index = 0; index < 3; index++)
+        {
+            g.FillEllipse(brush, x, y + (index * gap), dot, dot);
+        }
     }
 
     private void DrawButton(Graphics g, Palette palette, int index, bool enabled)
