@@ -411,12 +411,21 @@ internal static class Program
         using Form owner = new();
         owner.CreateControl();
 
-        ContextMenuStrip menu = DarkMenu.Create(owner.Font);
+        using ContextMenuStrip menu = DarkMenu.Create(owner.Font);
 
         int ran = 0;
+        menu.Reset();
         menu.Add("Downloads", "Ctrl+J", () => ran++);
         menu.Separator();
-        ToolStripMenuItem about = menu.Add("About", string.Empty, () => ran += 10);
+
+        // An entry that opens a dialog runs a message loop of its own while the
+        // click is still being dealt with. Pumping messages here is that, and it
+        // is what turned a menu thrown away after the click into a crash.
+        ToolStripMenuItem about = menu.Add("About", string.Empty, () =>
+        {
+            ran += 10;
+            Application.DoEvents();
+        });
 
         Check("menu: an entry carries the keys that do the same thing",
             menu.Items[0] is ToolStripMenuItem { ShortcutKeyDisplayString: "Ctrl+J" });
@@ -440,20 +449,32 @@ internal static class Program
             screen.Contains(menu.Bounds),
             $"{menu.Bounds} is not inside {screen}");
 
-        // Windows Forms closes the menu before it dispatches the click, so a menu
-        // thrown away on Closed takes the click with it — which is what made
-        // About and Downloads do nothing at all. Closing and then clicking is
-        // exactly that order.
+        // Windows Forms closes the menu before it dispatches the click, so this
+        // is the order the real thing happens in.
         menu.Close();
         about.PerformClick();
 
         Check("menu: an entry still does its work after the menu has closed",
             ran == 10, $"ran {ran}");
 
-        ((ToolStripMenuItem)menu.Items[0]).PerformClick();
-        Check("menu: and so does the next one", ran == 11, $"ran {ran}");
+        Check("menu: and the menu is still there afterwards, dialog or no dialog",
+            !menu.IsDisposed && !about.IsDisposed);
 
-        Application.DoEvents(); // the menu is thrown away here, once the clicks are through
+        ((ToolStripMenuItem)menu.Items[0]).PerformClick();
+        Check("menu: so the next entry works too", ran == 11, $"ran {ran}");
+
+        // Filling it again is what a second opening does. What was in it has to
+        // go with it, or every opening leaves its entries behind.
+        ToolStripItem stale = menu.Items[0];
+        menu.Reset();
+        Check("menu: refilling it empties what was there and disposes it",
+            menu.Items.Count == 0 && stale.IsDisposed);
+
+        menu.Add("Settings", string.Empty, () => ran += 100);
+        menu.ShowAt(owner, button);
+        menu.Close();
+        ((ToolStripMenuItem)menu.Items[0]).PerformClick();
+        Check("menu: and it opens and works a second time", ran == 111, $"ran {ran}");
 
         // What the About entry opens. Built rather than shown, so a mistake in
         // it fails here instead of the entry looking dead when it is clicked.
