@@ -33,7 +33,9 @@ toolbar are drawn rather than assembled from system controls.
       reachable from the menu, with the engine's downloads routed into the list
 - [x] History and downloads as pages of the browser's own, at
       `browser://history` and `browser://downloads`, in the window's colours
-- [ ] A bookmarks bar
+- [x] A bookmarks bar: each one as wide as its title needs, icons guessed
+      from each site's root, the rest behind a chevron, and Ctrl+Shift+B to
+      hide it
 - [ ] Settings, including the home page and the search engine
 - [ ] Session restore, private windows, find in page
 
@@ -50,7 +52,7 @@ Needs the .NET 9 SDK.
 ```
 dotnet build ChromiumBrowser.sln
 dotnet run --project tests/ChromiumBrowser.Tests    # 41 offline checks
-dotnet run --project tests/ChromiumBrowser.UiTests  # 30 user interface checks
+dotnet run --project tests/ChromiumBrowser.UiTests  # 34 user interface checks
 ```
 
 The user interface checks drive the controls the way a pointer would, without
