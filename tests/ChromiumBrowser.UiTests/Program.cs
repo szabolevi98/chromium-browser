@@ -4,6 +4,7 @@ using ChromiumBrowser.Controls;
 using ChromiumBrowser.Core.Data;
 using ChromiumBrowser.Core.Localisation;
 using ChromiumBrowser.Core.Ui;
+using ChromiumBrowser.Ui;
 
 namespace ChromiumBrowser.UiTests;
 
@@ -31,6 +32,9 @@ internal static class Program
         CheckInternalPages();
         CheckBookmarksBar();
         CheckFindBar();
+        CheckPrivateBadge();
+        CheckPrivatePage();
+        CheckHandover();
 
         Console.WriteLine();
         Console.WriteLine($"{_total - _failures}/{_total} user interface checks passed.");
@@ -161,6 +165,10 @@ internal static class Program
 
         // Ctrl+F is the one key this window took back off the page, because a
         // browser's own find bar is what people expect it to open.
+        Check("keys: Ctrl+N opens a window and Ctrl+Shift+N a private one",
+            ShortcutHandler.Match((int)Keys.N, true, false) == BrowserCommand.NewWindow
+            && ShortcutHandler.Match((int)Keys.N, true, true) == BrowserCommand.NewPrivateWindow);
+
         Check("keys: Ctrl+F opens the find bar",
             ShortcutHandler.Match((int)Keys.F, true, false) == BrowserCommand.FindInPage);
         Check("keys: F3 walks the matches, and with Shift walks back",
@@ -352,6 +360,143 @@ internal static class Program
 
         Check("find bar: it starts hidden, so a window that never searches never shows it",
             !new FindBarControl().Visible);
+    }
+
+    private static void CheckPrivateBadge()
+    {
+        // Drawn rather than described: the badge is the only thing telling a
+        // private window apart from a normal one at a glance, so the check
+        // paints the toolbar and looks at the pixels.
+        static Bitmap Paint(bool isPrivate)
+        {
+            using ToolbarControl toolbar = new();
+            toolbar.Size = new Size(900, 44);
+            toolbar.IsPrivate = isPrivate;
+
+            Bitmap picture = new(toolbar.Width, toolbar.Height);
+            toolbar.DrawToBitmap(picture, new Rectangle(0, 0, toolbar.Width, toolbar.Height));
+            return picture;
+        }
+
+        using Bitmap normal = Paint(false);
+        using Bitmap marked = Paint(true);
+
+
+
+        int differing = 0;
+        for (int y = 0; y < normal.Height; y++)
+        {
+            for (int x = 0; x < normal.Width; x++)
+            {
+                if (normal.GetPixel(x, y) != marked.GetPixel(x, y))
+                {
+                    differing++;
+                }
+            }
+        }
+
+        Check("badge: a private window's toolbar does not look like a normal one",
+            differing > 200, $"{differing} pixels differ");
+
+        // The pill on its own is not the point: it has to say something. The
+        // text is drawn in the muted colour, so what is counted is pixels of it
+        // well inside the pill, away from its border.
+        // The pill on its own is not the point: it has to say something. The
+        // lettering is counted inside the pill alone, because the rest of the
+        // toolbar has muted pixels of its own.
+        //
+        // This is also the check that caught the badge coming out blank:
+        // Graphics.DrawString draws nothing on this control's surface, and the
+        // GDI path WinForms uses for its own labels draws it.
+        Color muted = Theme.Current.TextMuted;
+        Rectangle pill = new(778, 11, 74, 22);
+        int lettering = 0;
+        for (int y = pill.Top + 3; y < pill.Bottom - 3; y++)
+        {
+            for (int x = pill.Left + 3; x < pill.Right - 3; x++)
+            {
+                Color pixel = marked.GetPixel(x, y);
+                if (Math.Abs(pixel.R - muted.R) < 60
+                    && Math.Abs(pixel.G - muted.G) < 60
+                    && Math.Abs(pixel.B - muted.B) < 60)
+                {
+                    lettering++;
+                }
+            }
+        }
+
+        Check("badge: and it says which kind of window this is",
+            lettering > 30, $"{lettering} pixels of lettering");
+    }
+
+    private static void CheckPrivatePage()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), $"cb-private-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+
+        InternalPages pages = new(
+            new HistoryStore(Path.Combine(directory, "history.json")),
+            new DownloadStore(Path.Combine(directory, "downloads.json")),
+            new SettingsStore(Path.Combine(directory, "settings.json")),
+            new BookmarkStore(Path.Combine(directory, "bookmarks.json")),
+            _ => { });
+
+        string page = pages.Render(new Uri("browser://private"));
+        Check("private page: it says what the window does not keep",
+            page.Contains("keeps nothing", StringComparison.Ordinal));
+
+        // The half every browser has had to learn to spell out: people read
+        // "private" as "invisible".
+        Check("private page: and that it does not make you invisible",
+            page.Contains("does not hide you", StringComparison.Ordinal));
+
+        Strings.Use("hu");
+        Check("private page: in the language that was chosen, title included",
+            pages.Render(new Uri("browser://private")) is string hungarian
+            && hungarian.Contains("Privátan böngészel", StringComparison.Ordinal)
+            && hungarian.Contains("<title>Privát ablak</title>", StringComparison.Ordinal));
+        Strings.Use("en");
+
+        Directory.Delete(directory, true);
+    }
+
+    private static void CheckHandover()
+    {
+        // Two different folders are two different browsers: a copy on a memory
+        // stick must not hand its addresses to the one installed on the machine.
+        string mine = Path.Combine(Path.GetTempPath(), $"cb-instance-{Guid.NewGuid():N}");
+        string somewhereElse = Path.Combine(Path.GetTempPath(), $"cb-instance-{Guid.NewGuid():N}");
+
+        using Mutex? first = SingleInstance.Claim(mine);
+        Check("one copy: the first launch claims the profile", first is not null);
+
+        using Mutex? second = SingleInstance.Claim(mine);
+        Check("one copy: the second does not", second is null);
+
+        using Mutex? elsewhere = SingleInstance.Claim(somewhereElse);
+        Check("one copy: but another folder is another browser", elsewhere is not null);
+
+        string? handed = "nothing yet";
+        using ManualResetEventSlim arrived = new(false);
+        SingleInstance.Listen(mine, url =>
+        {
+            handed = url;
+            arrived.Set();
+        });
+
+        Check("one copy: the address is taken by the copy already running",
+            SingleInstance.Send(mine, "https://example.com/"));
+        Check("one copy: and arrives as it was sent",
+            arrived.Wait(TimeSpan.FromSeconds(3)) && handed == "https://example.com/", $"got {handed}");
+
+        // Started with no address at all: still a request to show the browser.
+        arrived.Reset();
+        SingleInstance.Send(mine, null);
+        Check("one copy: a launch with no address still asks for the window",
+            arrived.Wait(TimeSpan.FromSeconds(3)) && handed is null, $"got {handed}");
+
+        Check("one copy: nobody is listening for the other folder",
+            !SingleInstance.Send(somewhereElse, "https://example.com/"));
     }
 
     private static void CheckCaptionButtons()

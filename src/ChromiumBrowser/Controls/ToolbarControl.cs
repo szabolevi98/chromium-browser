@@ -21,6 +21,7 @@ public sealed class ToolbarControl : Control
     };
 
     private int _hover = -1;
+    private bool _isPrivate;
 
     public ToolbarControl()
     {
@@ -84,6 +85,33 @@ public sealed class ToolbarControl : Control
 
     public bool IsLoading { get; set; }
 
+    /// <summary>
+    /// Marks the window as one that remembers nothing. A private window that
+    /// looks exactly like a normal one is how people end up typing into the
+    /// wrong window in both directions.
+    ///
+    /// Setting it lays the toolbar out again, because the address box is a real
+    /// text box whose width comes from where the badge starts. Without that, the
+    /// box keeps its old width and covers the badge — the badge is painted, and
+    /// a child control is drawn over it.
+    /// </summary>
+    public bool IsPrivate
+    {
+        get => _isPrivate;
+
+        set
+        {
+            if (_isPrivate == value)
+            {
+                return;
+            }
+
+            _isPrivate = value;
+            PerformLayout();
+            Invalidate();
+        }
+    }
+
     /// <summary>Shows an address without treating it as something the user typed.</summary>
     public void ShowAddress(string address)
     {
@@ -131,12 +159,28 @@ public sealed class ToolbarControl : Control
         }
     }
 
+    /// <summary>The pill saying "Private", or nothing wide at all in a normal window.</summary>
+    private Rectangle BadgeRect
+    {
+        get
+        {
+            if (!IsPrivate)
+            {
+                return Rectangle.Empty;
+            }
+
+            int width = (int)(74 * UiScale);
+            int height = (int)(22 * UiScale);
+            return new Rectangle(MenuRect.Left - (int)(8 * UiScale) - width, (Height - height) / 2, width, height);
+        }
+    }
+
     private Rectangle AddressRect
     {
         get
         {
             int left = ButtonRect(3).Right + (int)(8 * UiScale);
-            int right = MenuRect.Left - (int)(8 * UiScale);
+            int right = (IsPrivate ? BadgeRect.Left : MenuRect.Left) - (int)(8 * UiScale);
             int height = (int)(30 * UiScale);
             return new Rectangle(left, (Height - height) / 2, Math.Max(0, right - left), height);
         }
@@ -223,12 +267,41 @@ public sealed class ToolbarControl : Control
         DrawButton(g, palette, 3, enabled: true);
         DrawMenuButton(g, palette);
 
+        DrawBadge(g, palette);
+
+
         Rectangle bar = AddressRect;
         using GraphicsPath path = Rounded(bar, bar.Height / 2);
         using SolidBrush fill = new(_address.BackColor);
         g.FillPath(fill, path);
         using Pen line = new(_address.Focused ? palette.Accent : palette.Line, _address.Focused ? 1.4f * UiScale : 1f);
         g.DrawPath(line, path);
+    }
+
+    private void DrawBadge(Graphics g, Palette palette)
+    {
+        Rectangle badge = BadgeRect;
+        if (badge.IsEmpty)
+        {
+            return;
+        }
+
+        using GraphicsPath path = Rounded(badge, badge.Height / 2);
+        using SolidBrush fill = new(palette.Hover);
+        using Pen edge = new(palette.Line);
+        g.FillPath(fill, path);
+        g.DrawPath(edge, path);
+
+        // TextRenderer rather than Graphics.DrawString: the same GDI path
+        // WinForms uses for its own labels, so the badge matches the text in
+        // the box beside it rather than being hinted differently.
+        TextRenderer.DrawText(
+            g,
+            Core.Localisation.Strings.Of("private.badge"),
+            Font,
+            badge,
+            palette.TextMuted,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
     }
 
     /// <summary>The index the menu button answers to, kept away from the other four.</summary>

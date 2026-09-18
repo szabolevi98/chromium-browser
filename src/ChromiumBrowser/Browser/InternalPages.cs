@@ -59,9 +59,22 @@ public sealed class InternalPages
             "history" => History(query),
             "downloads" => Downloads(query),
             "settings" => SettingsPage(query),
+            "private" => PrivatePage(),
             _ => Document(Strings.Of("page.notFound"), $"<p class=\"empty\">{Strings.Of("page.notFound")}</p>"),
         };
     }
+
+    /// <summary>
+    /// What a private window opens on. It says what the window does not keep,
+    /// and — the part every browser has learned to spell out — what it does not
+    /// do, because "private" reads to most people as "invisible".
+    /// </summary>
+    private static string PrivatePage() =>
+        Document(Strings.Of("private.window"), $"""
+            <h1>{Strings.Of("private.title")}</h1>
+            <p class="lead">{Strings.Of("private.what")}</p>
+            <p class="empty">{Strings.Of("private.notInvisible")}</p>
+            """);
 
     private string History(Dictionary<string, string> query)
     {
@@ -358,6 +371,7 @@ public sealed class InternalPages
               .list a:hover { text-decoration: underline; text-decoration-color: var(--accent); }
               .list li > a:first-of-type { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
               .empty { color: var(--muted); padding: 40px 0; }
+              .lead { font-size: 16px; max-width: 62ch; }
               section { margin: 0 0 28px; }
               /* What follows the form is a different subject, and a rule says so. */
               form + section { margin-top: 36px; padding-top: 28px; border-top: 1px solid var(--line); }

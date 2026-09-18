@@ -48,6 +48,8 @@ public static class Strings
         // The window and its menu
         ["tab.new"] = ("New tab", "Új lap"),
         ["menu.newTab"] = ("New tab", "Új lap"),
+        ["menu.newWindow"] = ("New window", "Új ablak"),
+        ["menu.newPrivateWindow"] = ("New private window", "Új privát ablak"),
         ["menu.closeTab"] = ("Close tab", "Lap bezárása"),
         ["menu.bookmark"] = ("Bookmark this page", "Oldal könyvjelzőzése"),
         ["menu.unbookmark"] = ("Remove bookmark", "Könyvjelző törlése"),
@@ -64,6 +66,15 @@ public static class Strings
         ["menu.empty"] = ("Nothing yet", "Még semmi"),
 
         ["menu.find"] = ("Find on this page...", "Keresés az oldalon..."),
+
+        // The window that remembers nothing
+        ["private.badge"] = ("Private", "Privát"),
+        ["private.window"] = ("Private window", "Privát ablak"),
+        ["private.title"] = ("You are browsing privately", "Privátan böngészel"),
+        ["private.what"] = ("This window keeps nothing: no history, no download list, and its cookies go when it closes. What you download stays, and so do bookmarks you add.",
+                            "Ez az ablak semmit nem őriz meg: se előzményt, se letöltési listát, a sütijei pedig a bezárásakor eltűnnek. Amit letöltesz, az megmarad, és a felvett könyvjelzők is."),
+        ["private.notInvisible"] = ("It does not hide you from the sites you visit, from your employer, or from whoever runs the network.",
+                                    "Attól még lát téged a meglátogatott oldal, a munkahelyed és az is, aki a hálózatot üzemelteti."),
 
         // Finding words on a page
         ["find.placeholder"] = ("Find on this page", "Keresés az oldalon"),

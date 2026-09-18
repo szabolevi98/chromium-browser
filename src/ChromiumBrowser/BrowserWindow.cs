@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using CefSharp;
+using CefSharp.Handler;
 using CefSharp.WinForms;
 using ChromiumBrowser.Browser;
 using ChromiumBrowser.Controls;
@@ -63,19 +64,43 @@ public sealed class BrowserWindow : Form
     private readonly DownloadStore _downloads;
     private readonly SettingsStore _settings;
 
+    /// <summary>Whether this window is one that remembers nothing.</summary>
+    private readonly bool _isPrivate;
+
+    /// <summary>
+    /// The cookies and cache a private window browses with, which live in memory
+    /// and go when it closes. A normal window has none of its own: it shares the
+    /// engine's, which is what keeps you logged in between sessions.
+    /// </summary>
+    private readonly IRequestContext? _context;
+
+    /// <summary>Opens another window: the address, and whether it is private.</summary>
+    private readonly Action<string?, bool> _openWindow;
+
     public BrowserWindow(
         ProfileLocation profile,
         BookmarkStore bookmarks,
         HistoryStore history,
         DownloadStore downloads,
         SettingsStore settings,
-        string? startUrl)
+        string? startUrl,
+        bool isPrivate,
+        Action<string?, bool> openWindow,
+        ISchemeHandlerFactory internalPages)
     {
         _settings = settings;
         _profile = profile;
         _bookmarks = bookmarks;
         _history = history;
-        _downloads = downloads;
+        _isPrivate = isPrivate;
+        _openWindow = openWindow;
+
+        // What a private window downloads is not written down. The file lands
+        // wherever it was asked to land — that is the point of downloading it —
+        // but the list of what was fetched goes when the window does.
+        _downloads = isPrivate ? new DownloadStore(string.Empty) : downloads;
+
+        _context = isPrivate ? PrivateContext(internalPages) : null;
 
         Text = Branding.Name;
         MinimumSize = new Size(560, 380);
@@ -86,7 +111,7 @@ public sealed class BrowserWindow : Form
 
         _tabStrip.SelectedIndexChanged += (_, _) => ShowSelectedPage();
         _tabStrip.TabCloseRequested += (_, index) => CloseTab(index);
-        _tabStrip.NewTabRequested += (_, _) => OpenTab(HomePage);
+        _tabStrip.NewTabRequested += (_, _) => OpenTab(NewTabPage);
         _tabStrip.TabMoved += (_, move) => MoveBrowser(move.From, move.To);
         _tabStrip.EmptyAreaPressed += (_, _) => Win32.BeginWindowDrag(Handle);
         _tabStrip.EmptyAreaDoubleClicked += (_, _) => ToggleMaximise();
@@ -129,10 +154,43 @@ public sealed class BrowserWindow : Form
         Theme.Changed += OnThemeChanged;
         _settings.Changed += OnSettingsChanged;
 
-        OpenTab(startUrl ?? HomePage);
+        _toolbar.IsPrivate = isPrivate;
+
+        OpenTab(startUrl ?? NewTabPage);
+    }
+
+    /// <summary>
+    /// A context of its own for a private window, with its cookies and cache in
+    /// memory.
+    ///
+    /// The browser's own pages have to be registered on it as well. A scheme
+    /// handler belongs to the context that was browsing when it was registered,
+    /// not to the program, so a private window that was not told about
+    /// <c>browser://</c> answers its own settings page with "unknown scheme".
+    /// </summary>
+    private static IRequestContext PrivateContext(ISchemeHandlerFactory internalPages)
+    {
+        RequestContextHandler handler = new();
+        handler.OnInitialize(context =>
+            context.RegisterSchemeHandlerFactory(InternalPages.Scheme, string.Empty, internalPages));
+
+        return new RequestContext(
+            new RequestContextSettings
+            {
+                CachePath = string.Empty,
+                PersistSessionCookies = false,
+            },
+            handler);
     }
 
     private string HomePage => _settings.Current.HomePage;
+
+    /// <summary>
+    /// Where a new tab starts. A private window opens on the page explaining
+    /// what it keeps and what it does not, rather than on a home page that may
+    /// well be a site that knows who you are.
+    /// </summary>
+    private string NewTabPage => _isPrivate ? $"{InternalPages.Scheme}://private" : HomePage;
 
     private ChromiumWebBrowser? Selected =>
         _tabStrip.SelectedIndex >= 0 && _tabStrip.SelectedIndex < _browsers.Count
@@ -147,7 +205,7 @@ public sealed class BrowserWindow : Form
 
     private void OpenTab(string url)
     {
-        ChromiumWebBrowser browser = new(url) { Dock = DockStyle.Fill };
+        ChromiumWebBrowser browser = new(url, _context) { Dock = DockStyle.Fill };
 
         browser.TitleChanged += (_, e) => OnUiThread(() =>
         {
@@ -161,7 +219,7 @@ public sealed class BrowserWindow : Form
             _tabStrip.Refresh(at);
             if (at == _tabStrip.SelectedIndex)
             {
-                Text = $"{_tabStrip.Tabs[at].Title} - {Branding.Name}";
+                Text = WindowTitle(_tabStrip.Tabs[at].Title);
             }
         });
 
@@ -192,7 +250,7 @@ public sealed class BrowserWindow : Form
             // Recorded when the page settles rather than when it is asked for,
             // so a redirect leaves the address it ended at and the title it
             // ended up with, instead of a list of places passed through.
-            if (!e.IsLoading)
+            if (!e.IsLoading && !_isPrivate)
             {
                 _history.Record(browser.Address ?? string.Empty, TitleOf(browser), DateTimeOffset.Now);
             }
@@ -309,7 +367,7 @@ public sealed class BrowserWindow : Form
         int at = _tabStrip.SelectedIndex;
         if (at >= 0 && at < _tabStrip.Tabs.Count)
         {
-            Text = $"{_tabStrip.Tabs[at].Title} - {Branding.Name}";
+            Text = WindowTitle(_tabStrip.Tabs[at].Title);
         }
     }
 
@@ -340,7 +398,9 @@ public sealed class BrowserWindow : Form
     {
         switch (shortcut)
         {
-            case BrowserCommand.NewTab: OpenTab(HomePage); break;
+            case BrowserCommand.NewTab: OpenTab(NewTabPage); break;
+            case BrowserCommand.NewWindow: _openWindow(null, false); break;
+            case BrowserCommand.NewPrivateWindow: _openWindow(null, true); break;
             case BrowserCommand.CloseTab: CloseTab(_tabStrip.SelectedIndex); break;
             case BrowserCommand.NextTab: StepTab(1); break;
             case BrowserCommand.PreviousTab: StepTab(-1); break;
@@ -366,6 +426,35 @@ public sealed class BrowserWindow : Form
             case BrowserCommand.ShowHistory: OpenTab($"{InternalPages.Scheme}://history"); break;
             case BrowserCommand.ShowDownloads: OpenTab($"{InternalPages.Scheme}://downloads"); break;
         }
+    }
+
+    /// <summary>
+    /// What the taskbar and the window list say. A private window says so there
+    /// too, because that is where you look when several are open at once.
+    /// </summary>
+    private string WindowTitle(string tab) =>
+        _isPrivate
+            ? $"{tab} - {Branding.Name} ({Strings.Of("private.badge")})"
+            : $"{tab} - {Branding.Name}";
+
+    /// <summary>
+    /// Takes an address from a second launch: a tab if there is one, and the
+    /// window brought to the front either way, because somebody just asked for
+    /// this browser and is looking at whatever is covering it.
+    /// </summary>
+    public void Accept(string? url)
+    {
+        if (!string.IsNullOrWhiteSpace(url))
+        {
+            OpenTab(url);
+        }
+
+        if (WindowState == FormWindowState.Minimized)
+        {
+            WindowState = FormWindowState.Normal;
+        }
+
+        Activate();
     }
 
     private string TitleOf(ChromiumWebBrowser browser)
@@ -617,7 +706,9 @@ public sealed class BrowserWindow : Form
                 ShortcutKeyDisplayString = keys,
             });
 
-        Item(Strings.Of("menu.newTab"), "Ctrl+T", () => OpenTab(HomePage));
+        Item(Strings.Of("menu.newTab"), "Ctrl+T", () => OpenTab(NewTabPage));
+        Item(Strings.Of("menu.newWindow"), "Ctrl+N", () => _openWindow(null, false));
+        Item(Strings.Of("menu.newPrivateWindow"), "Ctrl+Shift+N", () => _openWindow(null, true));
         Item(Strings.Of("menu.closeTab"), "Ctrl+W", () => CloseTab(_tabStrip.SelectedIndex));
         menu.Items.Add(new ToolStripSeparator());
 
@@ -879,8 +970,12 @@ public sealed class BrowserWindow : Form
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
         Theme.Changed -= OnThemeChanged;
+        _settings.Changed -= OnSettingsChanged;
         base.OnFormClosed(e);
-        Cef.Shutdown();
+
+        // A private window's cookies and cache were only ever in memory; letting
+        // go of the context is what throws them away.
+        _context?.Dispose();
     }
 
     /// <summary>Where this window's data lives; shown in the about box later.</summary>

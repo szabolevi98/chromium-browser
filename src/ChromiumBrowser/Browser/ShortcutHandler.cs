@@ -6,6 +6,8 @@ namespace ChromiumBrowser.Browser;
 public enum BrowserCommand
 {
     NewTab,
+    NewWindow,
+    NewPrivateWindow,
     CloseTab,
     NextTab,
     PreviousTab,
@@ -93,6 +95,8 @@ public sealed class ShortcutHandler : IKeyboardHandler
         Keys.Tab when control && shift => BrowserCommand.PreviousTab,
         Keys.Tab when control => BrowserCommand.NextTab,
         Keys.T when control => BrowserCommand.NewTab,
+        Keys.N when control && shift => BrowserCommand.NewPrivateWindow,
+        Keys.N when control => BrowserCommand.NewWindow,
         Keys.W when control => BrowserCommand.CloseTab,
         Keys.L when control => BrowserCommand.FocusAddress,
         Keys.R when control => BrowserCommand.Reload,

@@ -15,6 +15,12 @@ namespace ChromiumBrowser.Core.Data;
 /// than a truncated one. And a load never throws: a file that is missing,
 /// empty, half-written or edited by hand gives an empty list, because losing
 /// the bookmarks is bad but refusing to start the browser is worse.
+///
+/// A store with no path at all keeps its list in memory and never touches the
+/// disk. That is what a private window's lists are: the same code, the same
+/// behaviour while the window is open, and nothing left behind when it closes —
+/// rather than a second kind of store written to be forgetful, which is the
+/// sort of thing that is one missed call away from writing after all.
 /// </summary>
 public static class JsonStore
 {
@@ -31,7 +37,7 @@ public static class JsonStore
     {
         try
         {
-            if (!File.Exists(path))
+            if (path.Length == 0 || !File.Exists(path))
             {
                 return [];
             }
@@ -48,6 +54,11 @@ public static class JsonStore
     /// <summary>Writes the list, replacing what was there in a single step.</summary>
     public static void Save<T>(string path, IEnumerable<T> items)
     {
+        if (path.Length == 0)
+        {
+            return;
+        }
+
         try
         {
             string? directory = Path.GetDirectoryName(path);
