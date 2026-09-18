@@ -115,16 +115,11 @@ closes.
 
 ## The 2020 version
 
-This is a rewrite from an empty folder, not a modernisation: the 2020 browser
-that used to live here shared the name and nothing else. It is kept on the
+A school project, and the only thing it has in common with this one is the name.
+It is kept as a time capsule on the
 [`2020_variant`](https://github.com/szabolevi98/chromium-browser/tree/2020_variant)
-branch and as [release v1.0.1](https://github.com/szabolevi98/chromium-browser/releases/tag/v1.0.1),
-with a built binary, as an archive. It is not safe to browse with: the CefSharp
-it was built on is years out of date and carries known Chromium advisories.
-
-What it did — several tabs, a search box, bookmarks with a manager, a home page
-that could be changed, a download handler and a Hungarian/English switch — was
-the floor this version had to clear, not the target.
+branch and in [release v1.0.1](https://github.com/szabolevi98/chromium-browser/releases/tag/v1.0.1),
+but it is not worth running: the CefSharp it was built on is years out of date.
 
 ## License
 
