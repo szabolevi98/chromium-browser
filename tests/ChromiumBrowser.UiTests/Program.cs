@@ -3,6 +3,7 @@ using ChromiumBrowser.Browser;
 using ChromiumBrowser.Controls;
 using ChromiumBrowser.Core.Data;
 using ChromiumBrowser.Core.Localisation;
+using ChromiumBrowser.Core.Profile;
 using ChromiumBrowser.Core.Ui;
 using ChromiumBrowser.Ui;
 
@@ -32,6 +33,7 @@ internal static class Program
         CheckInternalPages();
         CheckBookmarksBar();
         CheckFindBar();
+        CheckMenu();
         CheckPrivateBadge();
         CheckPrivatePage();
         CheckHandover();
@@ -373,6 +375,64 @@ internal static class Program
 
         Check("find bar: it starts hidden, so a window that never searches never shows it",
             !new FindBarControl().Visible);
+    }
+
+    private static void CheckMenu()
+    {
+        using Form owner = new();
+        owner.CreateControl();
+
+        ContextMenuStrip menu = DarkMenu.Create(owner.Font);
+
+        int ran = 0;
+        menu.Add("Downloads", "Ctrl+J", () => ran++);
+        menu.Separator();
+        ToolStripMenuItem about = menu.Add("About", string.Empty, () => ran += 10);
+
+        Check("menu: an entry carries the keys that do the same thing",
+            menu.Items[0] is ToolStripMenuItem { ShortcutKeyDisplayString: "Ctrl+J" });
+
+        owner.Location = new Point(300, 200);
+        owner.Size = new Size(600, 400);
+
+        Point under = new(120, 60);
+        menu.ShowAt(owner, under);
+
+        // Where it actually opened. A menu placed from a point worked out in
+        // screen coordinates lands on the wrong monitor once a second screen is
+        // scaled differently; asked for relative to the control, it lands on the
+        // control.
+        Point wanted = owner.PointToScreen(under);
+        Check("menu: it opens where it was asked to, next to the button",
+            Math.Abs(menu.Bounds.X - wanted.X) < 40 && Math.Abs(menu.Bounds.Y - wanted.Y) < 40,
+            $"asked for {wanted}, opened at {menu.Bounds.Location}");
+
+        Check("menu: on the screen the window is on",
+            Screen.FromControl(owner).Bounds.Contains(menu.Bounds.Location),
+            $"{menu.Bounds.Location} is not on {Screen.FromControl(owner).DeviceName}");
+
+        // Windows Forms closes the menu before it dispatches the click, so a menu
+        // thrown away on Closed takes the click with it — which is what made
+        // About and Downloads do nothing at all. Closing and then clicking is
+        // exactly that order.
+        menu.Close();
+        about.PerformClick();
+
+        Check("menu: an entry still does its work after the menu has closed",
+            ran == 10, $"ran {ran}");
+
+        ((ToolStripMenuItem)menu.Items[0]).PerformClick();
+        Check("menu: and so does the next one", ran == 11, $"ran {ran}");
+
+        Application.DoEvents(); // the menu is thrown away here, once the clicks are through
+
+        // What the About entry opens. Built rather than shown, so a mistake in
+        // it fails here instead of the entry looking dead when it is clicked.
+        using AboutForm box = new(new ProfileLocation(@"E:\stickrowser\Data", IsPortable: true));
+        box.CreateControl();
+        Check("menu: the about box can be built, which is what About opens",
+            box.Controls.Count > 0 && box.Text.Contains("Chromium Browser", StringComparison.Ordinal),
+            box.Text);
     }
 
     private static void CheckPrivateBadge()
