@@ -4,6 +4,7 @@ using CefSharp.WinForms;
 using ChromiumBrowser.Browser;
 using ChromiumBrowser.Controls;
 using ChromiumBrowser.Core;
+using ChromiumBrowser.Core.Data;
 using ChromiumBrowser.Core.Profile;
 using ChromiumBrowser.Native;
 using ChromiumBrowser.Ui;
@@ -44,9 +45,16 @@ public sealed class BrowserWindow : Form
     /// <summary>The zoom each page is at, which the engine does not hand back synchronously.</summary>
     private readonly Dictionary<ChromiumWebBrowser, double> _zoom = [];
 
+    private readonly BookmarkStore _bookmarks;
+    private readonly HistoryStore _history;
+    private readonly DownloadStore _downloads;
+
     public BrowserWindow(ProfileLocation profile, string? startUrl)
     {
         _profile = profile;
+        _bookmarks = new BookmarkStore(Path.Combine(profile.Path, "bookmarks.json"));
+        _history = new HistoryStore(Path.Combine(profile.Path, "history.json"));
+        _downloads = new DownloadStore(Path.Combine(profile.Path, "downloads.json"));
 
         Text = Branding.Name;
         MinimumSize = new Size(560, 380);
@@ -139,6 +147,19 @@ public sealed class BrowserWindow : Form
             _toolbar.IsLoading = e.IsLoading;
             _toolbar.Invalidate();
         });
+
+        browser.LoadingStateChanged += (_, e) => OnUiThread(() =>
+        {
+            // Recorded when the page settles rather than when it is asked for,
+            // so a redirect leaves the address it ended at and the title it
+            // ended up with, instead of a list of places passed through.
+            if (!e.IsLoading)
+            {
+                _history.Record(browser.Address ?? string.Empty, TitleOf(browser), DateTimeOffset.Now);
+            }
+        });
+
+        browser.DownloadHandler = new DownloadRouter(_downloads, OnUiThread, () => { });
 
         browser.AddressChanged += (_, e) => OnUiThread(() =>
         {
@@ -276,7 +297,26 @@ public sealed class BrowserWindow : Form
             case BrowserCommand.ZoomIn: Zoom(0.5); break;
             case BrowserCommand.ZoomOut: Zoom(-0.5); break;
             case BrowserCommand.ZoomReset: Zoom(null); break;
+            case BrowserCommand.BookmarkPage: ToggleBookmark(); break;
         }
+    }
+
+    private string TitleOf(ChromiumWebBrowser browser)
+    {
+        int at = _browsers.IndexOf(browser);
+        return at >= 0 && at < _tabStrip.Tabs.Count ? _tabStrip.Tabs[at].Title : string.Empty;
+    }
+
+    private void ToggleBookmark()
+    {
+        ChromiumWebBrowser? browser = Selected;
+        string? url = browser?.Address;
+        if (browser is null || string.IsNullOrWhiteSpace(url))
+        {
+            return;
+        }
+
+        _bookmarks.Toggle(url, TitleOf(browser));
     }
 
     private void StepTab(int direction)
@@ -329,6 +369,14 @@ public sealed class BrowserWindow : Form
         Item("New tab", "Ctrl+T", () => OpenTab(HomePage));
         Item("Close tab", "Ctrl+W", () => CloseTab(_tabStrip.SelectedIndex));
         menu.Items.Add(new ToolStripSeparator());
+
+        string? here = Selected?.Address;
+        bool kept = here is not null && _bookmarks.Contains(here);
+        Item(kept ? "Remove bookmark" : "Bookmark this page", "Ctrl+D", ToggleBookmark);
+        menu.Items.Add(Submenu("Bookmarks", _bookmarks.All.Select(b => (b.Title, b.Url))));
+        menu.Items.Add(Submenu("History", _history.All.Take(12).Select(h => (h.Title, h.Url))));
+        menu.Items.Add(DownloadsMenu());
+        menu.Items.Add(new ToolStripSeparator());
         Item("Zoom in", "Ctrl+Plus", () => Zoom(0.5));
         Item("Zoom out", "Ctrl+Minus", () => Zoom(-0.5));
         Item("Reset zoom", "Ctrl+0", () => Zoom(null));
@@ -340,6 +388,83 @@ public sealed class BrowserWindow : Form
 
         menu.Closed += (_, _) => menu.Dispose();
         menu.Show(screen);
+    }
+
+    /// <summary>A list of pages that open when picked, or a note that there are none.</summary>
+    private ToolStripMenuItem Submenu(string name, IEnumerable<(string Title, string Url)> pages)
+    {
+        ToolStripMenuItem parent = new(name);
+        foreach ((string title, string url) in pages)
+        {
+            parent.DropDownItems.Add(new ToolStripMenuItem(
+                string.IsNullOrWhiteSpace(title) ? url : title,
+                null,
+                (_, _) => OpenTab(url)));
+        }
+
+        if (parent.DropDownItems.Count == 0)
+        {
+            parent.DropDownItems.Add(new ToolStripMenuItem("Nothing yet") { Enabled = false });
+        }
+
+        parent.DropDown.Renderer = new MenuRenderer();
+        parent.DropDown.BackColor = Theme.Current.Surface;
+        parent.DropDown.ForeColor = Theme.Current.Text;
+        return parent;
+    }
+
+    /// <summary>
+    /// Downloads, each showing where it got to. Picking one opens the folder it
+    /// is in with the file selected, which is what a download list is for.
+    /// </summary>
+    private ToolStripMenuItem DownloadsMenu()
+    {
+        ToolStripMenuItem parent = new("Downloads");
+
+        foreach (DownloadRecord download in _downloads.All.Take(12))
+        {
+            string state = download.State switch
+            {
+                DownloadState.Completed => string.Empty,
+                DownloadState.InProgress => download.Progress is { } fraction
+                    ? $"  -  {fraction:P0}"
+                    : "  -  downloading",
+                _ => $"  -  {download.State.ToString().ToLowerInvariant()}",
+            };
+
+            parent.DropDownItems.Add(new ToolStripMenuItem(
+                download.FileName + state,
+                null,
+                (_, _) => RevealFile(download.Path))
+            {
+                Enabled = download.Path.Length > 0,
+            });
+        }
+
+        if (parent.DropDownItems.Count == 0)
+        {
+            parent.DropDownItems.Add(new ToolStripMenuItem("Nothing yet") { Enabled = false });
+        }
+
+        parent.DropDown.Renderer = new MenuRenderer();
+        parent.DropDown.BackColor = Theme.Current.Surface;
+        parent.DropDown.ForeColor = Theme.Current.Text;
+        return parent;
+    }
+
+    private static void RevealFile(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "explorer.exe",
+            Arguments = $"/select,\"{path}\"",
+            UseShellExecute = true,
+        });
     }
 
     private void ShowAbout()

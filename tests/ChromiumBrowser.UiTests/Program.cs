@@ -142,6 +142,8 @@ internal static class Program
         Check("keys: both plus keys zoom in",
             ShortcutHandler.Match((int)Keys.Add, true, false) == BrowserCommand.ZoomIn
             && ShortcutHandler.Match((int)Keys.Oemplus, true, false) == BrowserCommand.ZoomIn);
+        Check("keys: Ctrl+D keeps the page",
+            ShortcutHandler.Match((int)Keys.D, control: true, shift: false) == BrowserCommand.BookmarkPage);
         Check("keys: F5 reloads without a modifier",
             ShortcutHandler.Match((int)Keys.F5, false, false) == BrowserCommand.Reload);
 
