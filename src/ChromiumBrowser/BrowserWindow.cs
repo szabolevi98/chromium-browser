@@ -1169,6 +1169,20 @@ public sealed class BrowserWindow : Form
         ReloadInternalPages();
     }
 
+    private bool _maximisePressed;
+
+    private bool IsOverMaximise(Point screen) => !_fullscreen && _captionButtons.Visible
+        && _captionButtons.MaximiseBounds.Contains(_captionButtons.PointToClient(screen));
+
+    private void FinishMaximiseClick(Point screen)
+    {
+        bool activate = _maximisePressed && IsOverMaximise(screen);
+        _maximisePressed = false;
+        Capture = false;
+        _captionButtons.SetNativeHover(IsOverMaximise(screen));
+        if (activate) ToggleMaximise();
+    }
+
     private void ToggleMaximise() =>
         WindowState = WindowState == FormWindowState.Maximized
             ? FormWindowState.Normal
@@ -1188,6 +1202,46 @@ public sealed class BrowserWindow : Form
                 base.WndProc(ref m);
                 AdjustHitTest(ref m);
                 return;
+
+            // Keep HTMAXBUTTON for the shell's hover flyout, but own the click.
+            // Default non-client button tracking paints a second native button
+            // over our custom caption instead of reliably activating this one.
+            case Win32.WM_NCLBUTTONDOWN:
+            case 0x00A3: // WM_NCLBUTTONDBLCLK (second press of a rapid click pair)
+                if ((int)m.WParam != Win32.HTMAXBUTTON || _fullscreen) break;
+                _maximisePressed = true;
+                Capture = true;
+                m.Result = IntPtr.Zero;
+                return;
+
+            case 0x00A2 when _maximisePressed: // WM_NCLBUTTONUP
+                FinishMaximiseClick(Win32.ScreenPoint(m.LParam));
+                m.Result = IntPtr.Zero;
+                return;
+
+            case 0x0202 when _maximisePressed: // WM_LBUTTONUP while captured
+                FinishMaximiseClick(PointToScreen(Win32.ScreenPoint(m.LParam)));
+                m.Result = IntPtr.Zero;
+                return;
+
+            case 0x0200 when _maximisePressed: // WM_MOUSEMOVE while captured
+                _captionButtons.SetNativeHover(IsOverMaximise(PointToScreen(Win32.ScreenPoint(m.LParam))));
+                m.Result = IntPtr.Zero;
+                return;
+
+            case 0x0215: // WM_CAPTURECHANGED
+                _maximisePressed = false;
+                _captionButtons.SetNativeHover(false);
+                break;
+
+            case 0x001F: // WM_CANCELMODE
+                if (_maximisePressed)
+                {
+                    _maximisePressed = false;
+                    Capture = false;
+                    _captionButtons.SetNativeHover(false);
+                }
+                break;
 
             case 0x00A0: // WM_NCMOUSEMOVE
                 _captionButtons.SetNativeHover((int)m.WParam == Win32.HTMAXBUTTON);

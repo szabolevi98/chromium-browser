@@ -92,6 +92,34 @@ internal static partial class Program
             Win32.SendMessageW(window.Handle, 0xA3, (IntPtr)2, Pack(drag));
             Check("native: second double click restores", window.WindowState == FormWindowState.Normal);
 
+            max = caption.PointToScreen(new Point(caption.MaximiseBounds.Left + 12, 20));
+            Win32.SendMessageW(window.Handle, 0xA0, (IntPtr)9, Pack(max));
+            Check("native: maximize hover does not change window state", window.WindowState == FormWindowState.Normal);
+            Win32.SendMessageW(window.Handle, 0xA1, (IntPtr)9, Pack(max));
+            Check("native: maximize press captures without opening a second button", window.Capture
+                && window.WindowState == FormWindowState.Normal);
+            Win32.SendMessageW(window.Handle, 0x0202, IntPtr.Zero, Pack(window.PointToClient(max)));
+            Check("native: one maximize click immediately maximizes", window.WindowState == FormWindowState.Maximized
+                && !window.Capture);
+            max = caption.PointToScreen(new Point(caption.MaximiseBounds.Left + 12, 20));
+            Win32.SendMessageW(window.Handle, 0xA1, (IntPtr)9, Pack(max));
+            Win32.SendMessageW(window.Handle, 0xA2, (IntPtr)9, Pack(max));
+            Check("native: one restore click immediately restores", window.WindowState == FormWindowState.Normal);
+            max = caption.PointToScreen(new Point(caption.MaximiseBounds.Left + 12, 20));
+            Win32.SendMessageW(window.Handle, 0xA1, (IntPtr)9, Pack(max));
+            Win32.SendMessageW(window.Handle, 0x0202, IntPtr.Zero, Pack(new Point(20, 100)));
+            Check("native: releasing outside maximize cancels the click", window.WindowState == FormWindowState.Normal
+                && !window.Capture);
+            Win32.SendMessageW(window.Handle, 0xA1, (IntPtr)9, Pack(max));
+            Win32.SendMessageW(window.Handle, 0x001F, IntPtr.Zero, IntPtr.Zero);
+            Check("native: cancelling maximize tracking releases capture", !window.Capture
+                && !Field<bool>(window, "_maximisePressed") && window.WindowState == FormWindowState.Normal);
+            Win32.SendMessageW(window.Handle, 0xA1, (IntPtr)9, Pack(max));
+            window.Capture = false;
+            Check("native: capture loss cancels maximize tracking", !Field<bool>(window, "_maximisePressed")
+                && window.WindowState == FormWindowState.Normal);
+            Check("native: Snap hover target survives custom click handling", Win32.SendMessageW(window.Handle, 0x84, IntPtr.Zero, Pack(max)) == 9);
+
             Invoke(window, "Run", BrowserCommand.FocusAddress);
             ToolbarControl toolbar = Field<ToolbarControl>(window, "_toolbar");
             Check("native: Ctrl+L takes focus from Chromium", toolbar.AddressHasFocus);
