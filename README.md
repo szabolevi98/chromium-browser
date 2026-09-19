@@ -12,19 +12,23 @@ the same tabs, on the next machine.
 
 - **Tabs** that drag to reorder, close with the middle button, shrink as they
   multiply and scroll once they cannot shrink further, each with the site's own
-  icon.
+  icon. Closed tabs reopen with Ctrl+Shift+T; a tab's context menu offers
+  duplication, muting, and closing other tabs or those to its right.
 - **One bar for addresses and searches.** Anything that is not an address is
   searched for, with Google, DuckDuckGo, Bing, Startpage, Wikipedia, or an
-  address of your own.
+  address of your own. Bookmarks and history provide address suggestions
+  (private windows exclude normal history).
 - **Bookmarks**, on a bar that fits as many as the window is wide and puts the
   rest behind a chevron, renameable and removable where they sit.
 - **History and downloads** as pages of the browser's own — `browser://history`
   and `browser://downloads` — searchable, clearable, and drawn in the window's
-  colours rather than in white.
+  colours rather than in white. Downloads update live and can be paused,
+  resumed, cancelled, or retried.
 - **Find on a page** with Ctrl+F: a bar in the chrome, Enter and F3 to walk the
   matches, and a count that climbs as the engine works through the page.
 - **Private windows** with their own cookies and cache, held in memory and gone
-  when the window closes. Nothing reaches the history or the download list, and
+  when the window closes. History is not recorded and the private download
+  list stays in memory (downloaded files still remain on disk), and
   a badge in the toolbar means one is never mistaken for an ordinary window.
 - **Session restore**: the windows and tabs that were open come back, each
   window where it sat and the tab that was in front still in front.
@@ -37,7 +41,13 @@ the same tabs, on the next machine.
   in the settings and applied without a restart.
 - **The keyboard a browser is expected to answer**: Ctrl+T, Ctrl+W, Ctrl+N,
   Ctrl+Shift+N, Ctrl+Tab, Ctrl+L, Ctrl+D, Ctrl+H, Ctrl+J, Ctrl+F, F3, Ctrl+P,
-  the zoom keys and F5 — including while a page has the focus.
+  the zoom keys and F5 — including while a page has the focus. Alt+Left/Right,
+  Ctrl+1…9, F6, Escape and Ctrl+F5 handle navigation and loading; F11 toggles
+  full screen with a visible exit button.
+- **Windows title-bar behaviour**: double-click to maximise/restore, a reserved
+  draggable area even with many tabs, and native caption/maximise hit testing.
+- **Named, keyboard-operable controls**, tooltips, and tab media activity and
+  mute indicators.
 
 ## Portable, precisely
 
@@ -55,13 +65,19 @@ Needs the .NET 9 SDK.
 
 ```
 dotnet build ChromiumBrowser.sln
-dotnet run --project tests/ChromiumBrowser.Tests    # 90 offline checks
-dotnet run --project tests/ChromiumBrowser.UiTests  # 87 user interface checks
+dotnet run --project tests/ChromiumBrowser.Tests    # 105 offline checks
+dotnet run --project tests/ChromiumBrowser.UiTests  # 119 user interface checks
+dotnet run --project tests/ChromiumBrowser.UiTests -- --integration # 146 UI + native checks
 ```
 
 The user interface checks drive the controls the way a pointer would, without
 showing a window: they click tabs, drag one past its neighbour, open the menu
-and click an entry in it. `tools/screenshot.ps1` captures the running window on
+and click an entry in it. The optional integration suite starts Chromium with
+an isolated temporary profile and transparent native windows to check title-bar
+messages, focus, private pages, live downloads, audio activity and full screen.
+Actual mouse drag gestures, the visible Windows 11 Snap flyout and moving across
+monitors with different DPI still need manual desktop checks.
+`tools/screenshot.ps1` captures the running window on
 its own, which is how the picture above was taken, and `tools/make-app-icon.ps1`
 draws the icon at every size Windows asks for.
 
@@ -82,9 +98,11 @@ tools/                        the screenshot and icon tools
 
 The title bar is drawn by this project, but the window is not built out of
 panels: it keeps a real frame and takes back only the caption band, in
-`WM_NCCALCSIZE`. That is what keeps the snap layouts, the drop shadow, the
-minimise animation and Windows 11's rounded corners — all the things a
-home-made title bar usually loses.
+`WM_NCCALCSIZE`. Empty title-bar space returns `HTCAPTION`; the maximise button
+returns `HTMAXBUTTON` for Windows Snap integration. The real frame retains the
+drop shadow, minimise animation and Windows 11 rounded corners. Native tests
+check the hit-test results and double-click messages; the Snap flyout itself
+requires a manual Windows 11 check.
 
 ### A menu cannot be thrown away during its own click
 

@@ -1,4 +1,6 @@
 using ChromiumBrowser.Ui;
+using ChromiumBrowser.Native;
+using ChromiumBrowser.Core.Localisation;
 
 namespace ChromiumBrowser.Controls;
 
@@ -13,11 +15,14 @@ namespace ChromiumBrowser.Controls;
 public sealed class CaptionButtons : Control
 {
     private int _hover = -1;
+    private int _keyboardButton;
+    private readonly ToolTip _tip = new();
 
     public CaptionButtons()
     {
         DoubleBuffered = true;
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
+        TabStop = true;
     }
 
     public event EventHandler? MinimiseClicked;
@@ -35,9 +40,34 @@ public sealed class CaptionButtons : Control
 
     /// <summary>The width the three buttons need, which the window uses to lay itself out.</summary>
     public int PreferredWidth => ButtonWidth * 3;
+    public Rectangle MaximiseBounds => new(ButtonWidth, 0, ButtonWidth, Height);
+
+    private string ButtonName(int index) => Strings.Of(index switch
+    {
+        0 => "window.minimise", 1 => IsMaximised ? "window.restore" : "window.maximise", _ => "window.close",
+    });
+
+    protected override void WndProc(ref Message m)
+    {
+        if (m.Msg == Win32.WM_NCHITTEST && MaximiseBounds.Contains(PointToClient(Win32.ScreenPoint(m.LParam))))
+        {
+            m.Result = Win32.HTTRANSPARENT;
+            return;
+        }
+        base.WndProc(ref m);
+    }
+
+    public void SetNativeHover(bool hovered)
+    {
+        int next = hovered ? 1 : -1;
+        if (_hover == next) return;
+        _hover = next;
+        Invalidate();
+    }
 
     private int ButtonAt(int x)
     {
+        if (x < 0) return -1;
         int index = x / ButtonWidth;
         return index is >= 0 and < 3 ? index : -1;
     }
@@ -49,8 +79,43 @@ public sealed class CaptionButtons : Control
         if (hover != _hover)
         {
             _hover = hover;
+            _tip.SetToolTip(this, hover >= 0 ? ButtonName(hover) : string.Empty);
             Invalidate();
         }
+    }
+
+    private void InvokeButton(int index)
+    {
+        switch (index)
+        {
+            case 0: MinimiseClicked?.Invoke(this, EventArgs.Empty); break;
+            case 1: MaximiseClicked?.Invoke(this, EventArgs.Empty); break;
+            case 2: CloseClicked?.Invoke(this, EventArgs.Empty); break;
+        }
+    }
+
+    protected override bool IsInputKey(Keys keys) =>
+        (keys & Keys.KeyCode) is Keys.Left or Keys.Right || base.IsInputKey(keys);
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (e.KeyCode == Keys.Left) _keyboardButton = Math.Max(0, _keyboardButton - 1);
+        else if (e.KeyCode == Keys.Right) _keyboardButton = Math.Min(2, _keyboardButton + 1);
+        else if (e.KeyCode is Keys.Enter or Keys.Space) InvokeButton(_keyboardButton);
+        else return;
+        e.Handled = e.SuppressKeyPress = true;
+        Invalidate();
+    }
+
+    protected override AccessibleObject CreateAccessibilityInstance() => new AccessibleActions(this,
+        () => Enumerable.Range(0, 3).Select(i => new AccessibleActions.Item(ButtonName(i),
+            new Rectangle(i * ButtonWidth, 0, ButtonWidth, Height), () => InvokeButton(i))).ToArray());
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) _tip.Dispose();
+        base.Dispose(disposing);
     }
 
     protected override void OnMouseLeave(EventArgs e)
@@ -89,6 +154,7 @@ public sealed class CaptionButtons : Control
         {
             Rectangle rect = new(index * ButtonWidth, 0, ButtonWidth, Height);
             bool hot = index == _hover;
+            if (Focused && index == _keyboardButton) ControlPaint.DrawFocusRectangle(g, rect);
 
             if (hot)
             {

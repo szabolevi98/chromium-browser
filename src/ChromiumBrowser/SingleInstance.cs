@@ -1,6 +1,7 @@
 using System.IO.Pipes;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 
 namespace ChromiumBrowser;
 
@@ -20,6 +21,7 @@ namespace ChromiumBrowser;
 /// </summary>
 public static class SingleInstance
 {
+    public sealed record OpenRequest(string? Url, bool IsPrivate = false);
     /// <summary>
     /// Claims the right to be the one running copy, or returns nothing when
     /// another already has it.
@@ -43,7 +45,9 @@ public static class SingleInstance
     /// answers, and the launch that could not reach it is better off starting a
     /// browser than doing nothing at all.
     /// </summary>
-    public static bool Send(string profilePath, string? url)
+    public static bool Send(string profilePath, string? url) => SendRequest(profilePath, new(url));
+
+    public static bool SendRequest(string profilePath, OpenRequest request)
     {
         try
         {
@@ -54,7 +58,7 @@ public static class SingleInstance
             pipe.Connect(2000);
 
             using StreamWriter writer = new(pipe, new UTF8Encoding(false));
-            writer.WriteLine(url ?? string.Empty);
+            writer.WriteLine(JsonSerializer.Serialize(request));
             writer.Flush();
             return true;
         }
@@ -69,7 +73,18 @@ public static class SingleInstance
     /// nothing at all when the program was started with no argument, which still
     /// means "show me the browser".
     /// </summary>
-    public static void Listen(string profilePath, Action<string?> handed)
+    public static void Listen(string profilePath, Action<string?> handed) =>
+        ListenRequests(profilePath, request => handed(request.Url));
+
+    public static OpenRequest Decode(string? line)
+    {
+        if (string.IsNullOrWhiteSpace(line)) return new(null);
+        if (!line.StartsWith('{')) return new(line.Trim()); // older copies send a plain URL
+        try { return JsonSerializer.Deserialize<OpenRequest>(line) ?? new(null); }
+        catch (JsonException) { return new(null); }
+    }
+
+    public static void ListenRequests(string profilePath, Action<OpenRequest> handed)
     {
         Thread thread = new(() =>
         {
@@ -89,7 +104,7 @@ public static class SingleInstance
 
                     using StreamReader reader = new(pipe, new UTF8Encoding(false));
                     string? line = reader.ReadLine();
-                    handed(string.IsNullOrWhiteSpace(line) ? null : line.Trim());
+                    handed(Decode(line));
                 }
                 catch (Exception e) when (e is IOException or UnauthorizedAccessException)
                 {

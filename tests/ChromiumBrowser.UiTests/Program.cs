@@ -17,15 +17,17 @@ namespace ChromiumBrowser.UiTests;
 /// suit the tests. Nothing here needs a visible window, which is what keeps the
 /// checks runnable in one second on any machine.
 /// </summary>
-internal static class Program
+internal static partial class Program
 {
     private static int _failures;
     private static int _total;
 
     [STAThread]
-    private static int Main()
+    private static int Main(string[] args)
     {
-        ApplicationConfiguration.Initialize();
+        Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
+        Application.EnableVisualStyles();
+        Application.SetCompatibleTextRenderingDefault(false);
 
         CheckTabStrip();
         CheckCaptionButtons();
@@ -38,6 +40,8 @@ internal static class Program
         CheckPrivateBadge();
         CheckPrivatePage();
         CheckHandover();
+        CheckAuditRegressions();
+        if (args.Contains("--integration")) CheckWindowIntegration();
 
         Console.WriteLine();
         Console.WriteLine($"{_total - _failures}/{_total} user interface checks passed.");

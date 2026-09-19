@@ -31,7 +31,7 @@ internal static class Program
         // Before the engine is started, because starting it is the expensive
         // part and a second launch is only here to hand over an address.
         using Mutex? only = SingleInstance.Claim(profile.Path);
-        if (only is null && SingleInstance.Send(profile.Path, startUrl))
+        if (only is null && SingleInstance.SendRequest(profile.Path, new(startUrl, wantsPrivate)))
         {
             return 0;
         }
@@ -50,9 +50,9 @@ internal static class Program
         // or it would come up in the system's colours and change under the user.
         Theme.Choose(settings.Current.Theme);
 
-        BrowserSession windows = new(profile, bookmarks, history, downloads, settings, session);
+        using BrowserSession windows = new(profile, bookmarks, history, downloads, settings, session);
         InternalPages pages = new(history, downloads, settings, bookmarks, session, BrowserWindow.RevealFile);
-        InternalSchemeFactory internalPages = new(() => windows.AnyWindow, pages);
+        InternalSchemeFactory internalPages = new(() => windows.Dispatcher, pages);
         windows.InternalPages = internalPages;
 
         CefSettings cefSettings = new()
@@ -76,6 +76,7 @@ internal static class Program
             IsSecure = true,
             IsLocal = false,
             IsDisplayIsolated = true,
+            IsFetchEnabled = true,
 
             // The window does not exist yet: the engine wants its schemes before
             // it starts, so the factory is given a way to find it later.
@@ -99,12 +100,7 @@ internal static class Program
             ? windows.Newest!
             : windows.Open(startUrl, wantsPrivate);
 
-        SingleInstance.Listen(profile.Path, url => first.BeginInvoke(() =>
-        {
-            // The newest window rather than the first: it is the one in front,
-            // and the one a person handing over an address is looking for.
-            (windows.Newest ?? first).Accept(url);
-        }));
+        SingleInstance.ListenRequests(profile.Path, windows.Accept);
 
         Application.Run(windows);
 

@@ -31,6 +31,7 @@ public sealed class BookmarkStore
     }
 
     public IReadOnlyList<Bookmark> All => _bookmarks;
+    public event EventHandler? Changed;
 
     public bool Contains(string url) => IndexOf(url) >= 0;
 
@@ -100,5 +101,9 @@ public sealed class BookmarkStore
     private int IndexOf(string url) =>
         _bookmarks.FindIndex(b => string.Equals(b.Url, url, StringComparison.OrdinalIgnoreCase));
 
-    private void Save() => JsonStore.Save(_path, _bookmarks);
+    private void Save()
+    {
+        JsonStore.Save(_path, _bookmarks);
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
 }

@@ -26,7 +26,7 @@ public enum BookmarkAction
 public sealed class BookmarksBarControl : Control
 {
     private const int MaximumItemWidth = 200;
-    private const int Padding = 9;
+    private const int ItemPadding = 9;
     private const int IconSize = 16;
     private const int IconGap = 7;
 
@@ -115,7 +115,7 @@ public sealed class BookmarksBarControl : Control
             // The room a bookmark needs is the text plus everything around it:
             // the padding at each end, the icon, and the gap after the icon.
             // Leaving any of that out is what turns "Wikipedia" into "Wikipe...".
-            int furniture = (int)((Padding + IconSize + IconGap + Padding) * UiScale);
+            int furniture = (int)((ItemPadding + IconSize + IconGap + ItemPadding) * UiScale);
             int width = Math.Min((int)(MaximumItemWidth * UiScale), text + furniture);
 
             if (x + width > room)
@@ -241,7 +241,7 @@ public sealed class BookmarksBarControl : Control
             }
 
             int iconSize = (int)(IconSize * UiScale);
-            int left = bounds.X + (int)(Padding * UiScale);
+            int left = bounds.X + (int)(ItemPadding * UiScale);
             Image? icon = IconFor?.Invoke(bookmark);
 
             if (icon is not null)
@@ -255,7 +255,7 @@ public sealed class BookmarksBarControl : Control
                 g,
                 Title(bookmark),
                 Font,
-                new Rectangle(left, bounds.Y, bounds.Right - left - (int)(Padding * UiScale), bounds.Height),
+                new Rectangle(left, bounds.Y, bounds.Right - left - (int)(ItemPadding * UiScale), bounds.Height),
                 palette.Text,
                 TextFlags | TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
         }

@@ -25,7 +25,9 @@ internal static partial class Win32
     // Hit-test results. The resize edges are what make a borderless window still
     // feel like a window.
     internal const int HTCLIENT = 1;
+    internal const int HTTRANSPARENT = -1;
     internal const int HTCAPTION = 2;
+    internal const int HTMAXBUTTON = 9;
     internal const int HTLEFT = 10;
     internal const int HTRIGHT = 11;
     internal const int HTTOP = 12;
@@ -98,7 +100,18 @@ internal static partial class Win32
     internal static partial int GetSystemMetrics(int index);
 
     [LibraryImport("user32.dll")]
+    internal static partial int GetSystemMetricsForDpi(int index, uint dpi);
+
+    [LibraryImport("dwmapi.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool DwmDefWindowProc(IntPtr window, int message, IntPtr wParam, IntPtr lParam, out IntPtr result);
+
+    [LibraryImport("user32.dll")]
     internal static partial IntPtr SendMessageW(IntPtr window, int message, IntPtr wParam, IntPtr lParam);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool PostMessageW(IntPtr window, int message, IntPtr wParam, IntPtr lParam);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -113,7 +126,9 @@ internal static partial class Win32
     internal static void BeginWindowDrag(IntPtr window)
     {
         ReleaseCapture();
-        SendMessageW(window, WM_NCLBUTTONDOWN, HTCAPTION, IntPtr.Zero);
+        Point point = Cursor.Position;
+        SendMessageW(window, WM_NCLBUTTONDOWN, HTCAPTION,
+            (IntPtr)((point.Y << 16) | (point.X & 0xffff)));
     }
 
     [LibraryImport("user32.dll")]
@@ -131,5 +146,9 @@ internal static partial class Win32
 
     /// <summary>How thick the invisible resize border is, in this window's own pixels.</summary>
     internal static int ResizeBorder(float scale) =>
-        GetSystemMetrics(SM_CXSIZEFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER) + (int)(2 * scale);
+        GetSystemMetricsForDpi(SM_CXSIZEFRAME, (uint)(96 * scale))
+        + GetSystemMetricsForDpi(SM_CXPADDEDBORDER, (uint)(96 * scale));
+
+    internal static Point ScreenPoint(IntPtr packed) =>
+        new(unchecked((short)(long)packed), unchecked((short)((long)packed >> 16)));
 }

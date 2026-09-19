@@ -58,6 +58,13 @@ public sealed class BrowserWindow : Form
     private readonly ContextMenuStrip _menu = DarkMenu.Create(new Font("Segoe UI", 9f));
     private readonly Panel _pages = new() { Dock = DockStyle.None };
     private readonly List<ChromiumWebBrowser> _browsers = [];
+    private readonly Dictionary<ChromiumWebBrowser, AudioWatcher> _audio = [];
+    private readonly List<(string Url, string Title, int Index, bool Muted)> _closedTabs = [];
+    private ChromiumWebBrowser? _shownBrowser;
+    private bool _fullscreen;
+    private Rectangle _beforeFullscreen;
+    private FormWindowState _beforeFullscreenState;
+    private readonly Button _exitFullscreen = new() { AutoSize = true, Visible = false, TabStop = true };
 
     /// <summary>The zoom each page is at, which the engine does not hand back synchronously.</summary>
     private readonly Dictionary<ChromiumWebBrowser, double> _zoom = [];
@@ -80,6 +87,7 @@ public sealed class BrowserWindow : Form
     /// engine's, which is what keeps you logged in between sessions.
     /// </summary>
     private readonly IRequestContext? _context;
+    private readonly ISchemeHandlerFactory _internalPages;
 
     /// <summary>Opens another window: the address, and whether it is private.</summary>
     private readonly Action<string?, bool> _openWindow;
@@ -108,7 +116,10 @@ public sealed class BrowserWindow : Form
         // but the list of what was fetched goes when the window does.
         _downloads = isPrivate ? new DownloadStore(string.Empty) : downloads;
 
-        _context = isPrivate ? PrivateContext(internalPages) : null;
+        ISchemeHandlerFactory pages = internalPages is InternalSchemeFactory factory
+            ? factory.WithDownloads(_downloads) : internalPages;
+        _internalPages = pages;
+        _context = isPrivate ? PrivateContext(pages) : null;
 
         Text = Branding.Name;
         Icon = AppIcon();
@@ -118,12 +129,16 @@ public sealed class BrowserWindow : Form
         DoubleBuffered = true;
         BackColor = Theme.Current.Chrome;
 
-        _tabStrip.SelectedIndexChanged += (_, _) => ShowSelectedPage();
+        _tabStrip.SelectedIndexChanged += (_, _) =>
+        {
+            ShowSelectedPage();
+            ContentsChanged?.Invoke(this, EventArgs.Empty);
+        };
         _tabStrip.TabCloseRequested += (_, index) => CloseTab(index);
         _tabStrip.NewTabRequested += (_, _) => OpenTab(NewTabPage);
         _tabStrip.TabMoved += (_, move) => MoveBrowser(move.From, move.To);
-        _tabStrip.EmptyAreaPressed += (_, _) => Win32.BeginWindowDrag(Handle);
-        _tabStrip.EmptyAreaDoubleClicked += (_, _) => ToggleMaximise();
+        _tabStrip.TabMenuRequested += (_, request) => ShowTabMenu(request.Index, request.At);
+        _tabStrip.MuteRequested += (_, index) => ToggleMute(index);
 
         _captionButtons.MinimiseClicked += (_, _) => WindowState = FormWindowState.Minimized;
         _captionButtons.MaximiseClicked += (_, _) => ToggleMaximise();
@@ -139,9 +154,13 @@ public sealed class BrowserWindow : Form
             string url = AddressParser.Parse(typed, _settings.Current.SearchTemplate, InternalPages.Scheme);
             if (url.Length > 0)
             {
+                _toolbar.ShowAddress(url, force: true);
                 Selected?.LoadUrl(url);
+                FocusPage();
             }
         };
+        _toolbar.AddressFocused += (_, _) => _toolbar.SetSuggestions(_bookmarks.All.Select(b => b.Url)
+            .Concat(_isPrivate ? [] : _history.All.Select(h => h.Url)));
         _toolbar.MenuRequested += (_, at) => ShowMenu(at);
 
         _bookmarksBar.IconFor = BookmarkIcon;
@@ -159,9 +178,12 @@ public sealed class BrowserWindow : Form
         Controls.Add(_toolbar);
         Controls.Add(_tabStrip);
         Controls.Add(_captionButtons);
+        Controls.Add(_exitFullscreen);
+        _exitFullscreen.Click += (_, _) => SetFullscreen(false);
 
         Theme.Changed += OnThemeChanged;
         _settings.Changed += OnSettingsChanged;
+        _bookmarks.Changed += OnBookmarksChanged;
 
         _toolbar.IsPrivate = isPrivate;
 
@@ -188,7 +210,10 @@ public sealed class BrowserWindow : Form
     {
         RequestContextHandler handler = new();
         handler.OnInitialize(context =>
-            context.RegisterSchemeHandlerFactory(InternalPages.Scheme, string.Empty, internalPages));
+        {
+            bool registered = context.RegisterSchemeHandlerFactory(InternalPages.Scheme, string.Empty, internalPages);
+            System.Diagnostics.Debug.WriteLine($"Private scheme registered: {registered}");
+        });
 
         return new RequestContext(
             new RequestContextSettings
@@ -231,9 +256,10 @@ public sealed class BrowserWindow : Form
 
     // ------------------------------------------------------------------- tabs
 
-    private void OpenTab(string url, string? knownTitle = null)
+    private void OpenTab(string url, string? knownTitle = null, bool muted = false)
     {
         ChromiumWebBrowser browser = new(url, _context) { Dock = DockStyle.Fill };
+        browser.RequestHandler = new InternalRequestHandler(_internalPages);
 
         browser.TitleChanged += (_, e) => OnUiThread(() =>
         {
@@ -296,7 +322,24 @@ public sealed class BrowserWindow : Form
             ContentsChanged?.Invoke(this, EventArgs.Empty);
         });
 
-        browser.KeyboardHandler = new ShortcutHandler(shortcut => OnUiThread(() => Run(shortcut)));
+        browser.KeyboardHandler = new ShortcutHandler(shortcut => OnUiThread(() => Run(shortcut)),
+            () => _fullscreen || _findBar.Visible);
+        AudioWatcher audio = new(audible => OnUiThread(() =>
+        {
+            int at = _browsers.IndexOf(browser);
+            if (at < 0) return;
+            _tabStrip.Tabs[at].IsAudible = audible;
+            _tabStrip.Refresh(at);
+        }));
+        _audio[browser] = audio;
+        browser.IsBrowserInitializedChanged += (_, _) =>
+        {
+            if (browser.IsBrowserInitialized)
+            {
+                browser.GetBrowser().GetHost().SetAudioMuted(muted);
+                audio.Attach(browser.GetBrowser());
+            }
+        };
 
         browser.FindHandler = new FindWatcher(result => OnUiThread(() =>
         {
@@ -336,6 +379,7 @@ public sealed class BrowserWindow : Form
         {
             Title = string.IsNullOrWhiteSpace(knownTitle) ? Strings.Of("tab.new") : knownTitle,
             IsLoading = true,
+            IsMuted = muted,
         });
 
         ShowSelectedPage();
@@ -356,9 +400,13 @@ public sealed class BrowserWindow : Form
         }
 
         ChromiumWebBrowser browser = _browsers[index];
+        _closedTabs.Add((browser.Address ?? NewTabPage, _tabStrip.Tabs[index].Title, index, _tabStrip.Tabs[index].IsMuted));
+        if (_closedTabs.Count > 50) _closedTabs.RemoveAt(0);
         _browsers.RemoveAt(index);
         _zoom.Remove(browser);
         _pages.Controls.Remove(browser);
+        if (_audio.Remove(browser, out AudioWatcher? audio)) audio.Dispose();
+        (browser.DownloadHandler as IDisposable)?.Dispose();
         browser.Dispose();
 
         _tabStrip.RemoveTab(index);
@@ -384,6 +432,7 @@ public sealed class BrowserWindow : Form
         // A search belongs to the page it was typed against, so moving to
         // another tab ends it rather than carrying a count across.
         CloseFind();
+        _shownBrowser = Selected;
 
         ChromiumWebBrowser? selected = Selected;
         foreach (ChromiumWebBrowser browser in _browsers)
@@ -397,9 +446,10 @@ public sealed class BrowserWindow : Form
         }
 
         selected.BringToFront();
-        _toolbar.ShowAddress(selected.Address ?? string.Empty);
+        _toolbar.ShowAddress(selected.Address ?? string.Empty, force: true);
         _toolbar.CanGoBack = selected.CanGoBack;
         _toolbar.CanGoForward = selected.CanGoForward;
+        _toolbar.IsLoading = _tabStrip.Tabs[_tabStrip.SelectedIndex].IsLoading;
         _toolbar.Invalidate();
 
         int at = _tabStrip.SelectedIndex;
@@ -421,7 +471,13 @@ public sealed class BrowserWindow : Form
         BrowserCommand? shortcut = ShortcutHandler.Match(
             (int)(keyData & Keys.KeyCode),
             keyData.HasFlag(Keys.Control),
-            keyData.HasFlag(Keys.Shift));
+            keyData.HasFlag(Keys.Shift), keyData.HasFlag(Keys.Alt));
+
+        if ((keyData & Keys.KeyCode) == Keys.Escape && _findBar.ContainsFocus)
+        {
+            CloseFind();
+            return true;
+        }
 
         if (shortcut is null)
         {
@@ -434,15 +490,32 @@ public sealed class BrowserWindow : Form
 
     private void Run(BrowserCommand shortcut)
     {
+        if (shortcut >= BrowserCommand.Tab1 && shortcut <= BrowserCommand.Tab8)
+        {
+            _tabStrip.SelectedIndex = shortcut - BrowserCommand.Tab1;
+            return;
+        }
         switch (shortcut)
         {
+            case BrowserCommand.ReopenTab: ReopenTab(); break;
+            case BrowserCommand.LastTab: _tabStrip.SelectedIndex = _browsers.Count - 1; break;
+            case BrowserCommand.Back: Selected?.Back(); break;
+            case BrowserCommand.Forward: Selected?.Forward(); break;
+            case BrowserCommand.HardReload: Selected?.Reload(ignoreCache: true); break;
+            case BrowserCommand.Fullscreen: SetFullscreen(!_fullscreen); break;
+            case BrowserCommand.Escape:
+                if (_fullscreen) SetFullscreen(false);
+                else if (_toolbar.AddressHasFocus) { _toolbar.CancelAddressEdit(); FocusPage(); }
+                else if (_findBar.Visible) CloseFind();
+                else Selected?.Stop();
+                break;
             case BrowserCommand.NewTab: OpenTab(NewTabPage); break;
             case BrowserCommand.NewWindow: _openWindow(null, false); break;
             case BrowserCommand.NewPrivateWindow: _openWindow(null, true); break;
             case BrowserCommand.CloseTab: CloseTab(_tabStrip.SelectedIndex); break;
             case BrowserCommand.NextTab: StepTab(1); break;
             case BrowserCommand.PreviousTab: StepTab(-1); break;
-            case BrowserCommand.FocusAddress: _toolbar.FocusAddress(); break;
+            case BrowserCommand.FocusAddress: PageKeyboard(mine: false); _toolbar.FocusAddress(); break;
             case BrowserCommand.Reload: Selected?.Reload(); break;
             case BrowserCommand.Print: Selected?.Print(); break;
             case BrowserCommand.ZoomIn: Zoom(0.5); break;
@@ -464,6 +537,93 @@ public sealed class BrowserWindow : Form
             case BrowserCommand.ShowHistory: OpenTab($"{InternalPages.Scheme}://history"); break;
             case BrowserCommand.ShowDownloads: OpenTab($"{InternalPages.Scheme}://downloads"); break;
         }
+    }
+
+    private void FocusPage()
+    {
+        Selected?.Focus();
+        PageKeyboard(mine: true);
+    }
+
+    private void ReopenTab()
+    {
+        if (_closedTabs.Count == 0) return;
+        var closed = _closedTabs[^1];
+        _closedTabs.RemoveAt(_closedTabs.Count - 1);
+        OpenTab(closed.Url, closed.Title, closed.Muted);
+        int from = _browsers.Count - 1;
+        int to = Math.Clamp(closed.Index, 0, from);
+        _tabStrip.MoveTab(from, to);
+    }
+
+    private void ToggleMute(int index)
+    {
+        if (index < 0 || index >= _browsers.Count || !_browsers[index].IsBrowserInitialized) return;
+        TabItem tab = _tabStrip.Tabs[index];
+        tab.IsMuted = !tab.IsMuted;
+        _browsers[index].GetBrowser().GetHost().SetAudioMuted(tab.IsMuted);
+        _tabStrip.Refresh(index);
+    }
+
+    private void ShowTabMenu(int index, Point at)
+    {
+        ContextMenuStrip menu = _menu.Reset();
+        menu.Add(Strings.Of("menu.newTab"), "Ctrl+T", () => OpenTab(NewTabPage));
+        menu.Add(Strings.Of("tab.reopen"), "Ctrl+Shift+T", ReopenTab);
+        menu.Items[^1].Enabled = _closedTabs.Count > 0;
+        if (index >= 0 && index < _browsers.Count)
+        {
+            ChromiumWebBrowser target = _browsers[index];
+            menu.Separator();
+            menu.Add(Strings.Of("tab.duplicate"), string.Empty, () =>
+            {
+                int current = _browsers.IndexOf(target);
+                if (current >= 0) OpenTab(target.Address ?? NewTabPage, _tabStrip.Tabs[current].Title);
+            });
+            menu.Add(Strings.Of(_tabStrip.Tabs[index].IsMuted ? "tab.unmute" : "tab.mute"), string.Empty,
+                () => ToggleMute(_browsers.IndexOf(target)));
+            menu.Add(Strings.Of("menu.closeTab"), "Ctrl+W", () => CloseTab(_browsers.IndexOf(target)));
+            menu.Add(Strings.Of("tab.closeOthers"), string.Empty, () => CloseRelativeTabs(target, rightOnly: false));
+            menu.Add(Strings.Of("tab.closeRight"), string.Empty, () => CloseRelativeTabs(target, rightOnly: true));
+        }
+        menu.ShowAt(_tabStrip, at);
+    }
+
+    private void CloseRelativeTabs(ChromiumWebBrowser kept, bool rightOnly)
+    {
+        int keep = _browsers.IndexOf(kept);
+        if (keep < 0) return;
+        for (int i = _browsers.Count - 1; i >= 0; i--)
+            if (i != keep && (!rightOnly || i > keep)) CloseTab(i);
+    }
+
+    private void SetFullscreen(bool enabled)
+    {
+        if (_fullscreen == enabled) return;
+        CloseFind();
+        SuspendLayout();
+        if (enabled)
+        {
+            _beforeFullscreenState = WindowState;
+            _beforeFullscreen = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
+            Rectangle screen = Screen.FromControl(this).Bounds;
+            _fullscreen = true;
+            WindowState = FormWindowState.Normal;
+            FormBorderStyle = FormBorderStyle.None;
+            Bounds = screen;
+        }
+        else
+        {
+            _fullscreen = false;
+            FormBorderStyle = FormBorderStyle.Sizable;
+            Bounds = _beforeFullscreen;
+            WindowState = _beforeFullscreenState;
+        }
+        _exitFullscreen.Text = Strings.Of("window.exitFullscreen") + " (F11 / Esc)";
+        _exitFullscreen.Visible = enabled;
+        ResumeLayout(performLayout: true);
+        _exitFullscreen.BringToFront();
+        ContentsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
@@ -492,7 +652,7 @@ public sealed class BrowserWindow : Form
     /// </summary>
     public SavedWindow Snapshot()
     {
-        Rectangle bounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
+        Rectangle bounds = _fullscreen ? _beforeFullscreen : WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
 
         List<SavedTab> tabs = [];
         for (int index = 0; index < _browsers.Count; index++)
@@ -522,7 +682,7 @@ public sealed class BrowserWindow : Form
             Y = bounds.Y,
             Width = bounds.Width,
             Height = bounds.Height,
-            Maximised = WindowState == FormWindowState.Maximized,
+            Maximised = (_fullscreen ? _beforeFullscreenState : WindowState) == FormWindowState.Maximized,
         };
     }
 
@@ -537,11 +697,13 @@ public sealed class BrowserWindow : Form
         if (saved.Width > 200 && saved.Height > 150)
         {
             Rectangle wanted = new(saved.X, saved.Y, saved.Width, saved.Height);
-            if (Screen.AllScreens.Any(screen => screen.WorkingArea.IntersectsWith(wanted)))
-            {
-                StartPosition = FormStartPosition.Manual;
-                Bounds = wanted;
-            }
+            Rectangle work = Screen.FromRectangle(wanted).WorkingArea;
+            wanted.Size = new Size(Math.Min(Math.Max(MinimumSize.Width, wanted.Width), work.Width),
+                Math.Min(Math.Max(MinimumSize.Height, wanted.Height), work.Height));
+            wanted.X = Math.Clamp(wanted.X, work.Left, Math.Max(work.Left, work.Right - wanted.Width));
+            wanted.Y = Math.Clamp(wanted.Y, work.Top, Math.Max(work.Top, work.Bottom - wanted.Height));
+            StartPosition = FormStartPosition.Manual;
+            Bounds = wanted;
         }
 
         foreach (SavedTab tab in saved.Tabs)
@@ -605,6 +767,8 @@ public sealed class BrowserWindow : Form
         PerformLayout();
         _bookmarksBar.Invalidate();
     }
+
+    private void OnBookmarksChanged(object? sender, EventArgs e) => RefreshBookmarks();
 
     private void DoWithBookmark(Bookmark bookmark, BookmarkAction action)
     {
@@ -781,7 +945,8 @@ public sealed class BrowserWindow : Form
             return;
         }
 
-        Selected?.StopFinding(clearSelection: true);
+        if (_shownBrowser is { IsDisposed: false, IsBrowserInitialized: true })
+            _shownBrowser.StopFinding(clearSelection: true);
         _findBar.ShowCounter(string.Empty);
         _findBar.Visible = false;
         PerformLayout();
@@ -812,6 +977,8 @@ public sealed class BrowserWindow : Form
         Item(Strings.Of("menu.newWindow"), "Ctrl+N", () => _openWindow(null, false));
         Item(Strings.Of("menu.newPrivateWindow"), "Ctrl+Shift+N", () => _openWindow(null, true));
         Item(Strings.Of("menu.closeTab"), "Ctrl+W", () => CloseTab(_tabStrip.SelectedIndex));
+        Item(Strings.Of("tab.reopen"), "Ctrl+Shift+T", ReopenTab);
+        menu.Items[^1].Enabled = _closedTabs.Count > 0;
         menu.Separator();
 
         string? here = Selected?.Address;
@@ -822,6 +989,7 @@ public sealed class BrowserWindow : Form
         Item(Strings.Of("menu.downloads"), "Ctrl+J", () => OpenTab($"{InternalPages.Scheme}://downloads"));
         menu.Separator();
         Item(Strings.Of("menu.find"), "Ctrl+F", OpenFind);
+        Item(Strings.Of("window.fullscreen"), "F11", () => SetFullscreen(!_fullscreen));
         Item(Strings.Of("menu.zoomIn"), "Ctrl+Plus", () => Zoom(0.5));
         Item(Strings.Of("menu.zoomOut"), "Ctrl+Minus", () => Zoom(-0.5));
         Item(Strings.Of("menu.zoomReset"), "Ctrl+0", () => Zoom(null));
@@ -887,7 +1055,8 @@ public sealed class BrowserWindow : Form
             return;
         }
 
-        BeginInvoke(action);
+        try { BeginInvoke(() => { if (!IsDisposed && !Disposing) action(); }); }
+        catch (InvalidOperationException) when (IsDisposed || Disposing || !IsHandleCreated) { }
     }
 
     // ----------------------------------------------------------------- layout
@@ -906,6 +1075,16 @@ public sealed class BrowserWindow : Form
     protected override void OnLayout(LayoutEventArgs e)
     {
         base.OnLayout(e);
+        if (_settings is null) return; // Form can lay out during base construction.
+
+        _tabStrip.Visible = _captionButtons.Visible = _toolbar.Visible = !_fullscreen;
+        if (_fullscreen)
+        {
+            _bookmarksBar.Visible = false;
+            _pages.Bounds = ClientRectangle;
+            _exitFullscreen.Location = new Point(Math.Max(0, ClientSize.Width - _exitFullscreen.Width - Dip(12)), Dip(8));
+            return;
+        }
 
         // A maximised window sits a border's width outside the screen on every
         // side, so the content has to come in by that much or its top row is cut
@@ -1001,7 +1180,7 @@ public sealed class BrowserWindow : Form
     {
         switch (m.Msg)
         {
-            case Win32.WM_NCCALCSIZE when m.WParam != IntPtr.Zero:
+            case Win32.WM_NCCALCSIZE when m.WParam != IntPtr.Zero && !_fullscreen:
                 OnNonClientCalcSize(ref m);
                 return;
 
@@ -1010,12 +1189,24 @@ public sealed class BrowserWindow : Form
                 AdjustHitTest(ref m);
                 return;
 
+            case 0x00A0: // WM_NCMOUSEMOVE
+                _captionButtons.SetNativeHover((int)m.WParam == Win32.HTMAXBUTTON);
+                break;
+            case 0x02A2: // WM_NCMOUSELEAVE
+                _captionButtons.SetNativeHover(false);
+                break;
+
             case Win32.WM_SETTINGCHANGE:
             case Win32.WM_DWMCOLORIZATIONCOLORCHANGED:
                 Theme.Refresh();
                 break;
         }
 
+        if (!_fullscreen && Win32.DwmDefWindowProc(Handle, m.Msg, m.WParam, m.LParam, out IntPtr result))
+        {
+            m.Result = result;
+            return;
+        }
         base.WndProc(ref m);
     }
 
@@ -1047,13 +1238,25 @@ public sealed class BrowserWindow : Form
     /// </summary>
     private void AdjustHitTest(ref Message m)
     {
-        if (m.Result != Win32.HTCLIENT || WindowState == FormWindowState.Maximized)
+        if (_fullscreen || m.Result != Win32.HTCLIENT)
         {
             return;
         }
 
         Point screen = new(unchecked((short)(long)m.LParam), unchecked((short)((long)m.LParam >> 16)));
         Point client = PointToClient(screen);
+
+        if (_captionButtons.MaximiseBounds.Contains(_captionButtons.PointToClient(screen)))
+        {
+            m.Result = Win32.HTMAXBUTTON;
+            return;
+        }
+        if (_tabStrip.DragArea.Contains(_tabStrip.PointToClient(screen)))
+        {
+            m.Result = Win32.HTCAPTION;
+            return;
+        }
+        if (WindowState == FormWindowState.Maximized) return;
 
         if (client.Y >= Dip(TopResizeStrip))
         {
@@ -1072,10 +1275,18 @@ public sealed class BrowserWindow : Form
     {
         Theme.Changed -= OnThemeChanged;
         _settings.Changed -= OnSettingsChanged;
+        _bookmarks.Changed -= OnBookmarksChanged;
         base.OnFormClosed(e);
 
         _menu.Reset();
         _menu.Dispose();
+
+        foreach (ChromiumWebBrowser browser in _browsers)
+        {
+            if (_audio.Remove(browser, out AudioWatcher? audio)) audio.Dispose();
+            (browser.DownloadHandler as IDisposable)?.Dispose();
+            browser.Dispose();
+        }
 
         // A private window's cookies and cache were only ever in memory; letting
         // go of the context is what throws them away.

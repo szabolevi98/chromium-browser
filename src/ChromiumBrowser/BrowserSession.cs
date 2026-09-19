@@ -1,6 +1,7 @@
 using CefSharp;
 using ChromiumBrowser.Core.Data;
 using ChromiumBrowser.Core.Profile;
+using ChromiumBrowser.Native;
 
 namespace ChromiumBrowser;
 
@@ -26,6 +27,8 @@ internal sealed class BrowserSession : ApplicationContext
     private readonly SettingsStore _settings;
     private readonly SessionStore _session;
     private readonly List<BrowserWindow> _windows = [];
+    private readonly UiDispatcher _dispatcher = new();
+    private volatile bool _ending;
 
     /// <summary>
     /// Writes the session a moment after the last change rather than on every
@@ -72,13 +75,26 @@ internal sealed class BrowserSession : ApplicationContext
     }
 
     /// <summary>
-    /// Any window that is up, for work that has to happen on the thread the
-    /// windows live on. The engine asks for the browser's own pages from a
-    /// thread of its own and needs somewhere to hand that work to; which window
-    /// it is does not matter, only that it is alive.
+    /// Application-lifetime UI dispatcher for engine and instance-handover
+    /// callbacks. Survives closing the first window and recreating form handles.
     /// </summary>
-    public Control? AnyWindow =>
-        _windows.FirstOrDefault(window => !window.IsDisposed && window.IsHandleCreated);
+    public UiDispatcher? Dispatcher => _ending ? null : _dispatcher;
+
+    public void Accept(SingleInstance.OpenRequest request)
+    {
+        if (_ending || _dispatcher.IsDisposed) return;
+        try
+        {
+            _dispatcher.Post(() =>
+            {
+                if (_ending) return;
+                BrowserWindow? target = _windows.LastOrDefault(w => !w.IsDisposed && w.IsPrivate == request.IsPrivate);
+                if (target is null) Open(request.Url, request.IsPrivate);
+                else target.Accept(request.Url);
+            });
+        }
+        catch (InvalidOperationException) when (_ending || _dispatcher.IsDisposed) { }
+    }
 
     /// <summary>The window opened most recently, which is where a handed-over address goes.</summary>
     public BrowserWindow? Newest => _windows.Count > 0 ? _windows[^1] : null;
@@ -105,6 +121,7 @@ internal sealed class BrowserSession : ApplicationContext
         {
             window.ContentsChanged += (_, _) => SaveLater();
             window.ResizeEnd += (_, _) => SaveLater();
+            window.Resize += (_, _) => SaveLater();
         }
 
         window.FormClosed += (_, _) =>
@@ -121,6 +138,8 @@ internal sealed class BrowserSession : ApplicationContext
 
             if (_windows.Count == 0)
             {
+                _ending = true;
+                _saveSoon.Stop();
                 ExitThread();
             }
         };
@@ -152,6 +171,7 @@ internal sealed class BrowserSession : ApplicationContext
 
     private void SaveLater()
     {
+        if (_ending) return;
         _saveSoon.Stop();
         _saveSoon.Start();
     }
@@ -174,5 +194,16 @@ internal sealed class BrowserSession : ApplicationContext
         }
 
         _session.Save(open);
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _ending = true;
+            _saveSoon.Dispose();
+            _dispatcher.Dispose();
+        }
+        base.Dispose(disposing);
     }
 }
