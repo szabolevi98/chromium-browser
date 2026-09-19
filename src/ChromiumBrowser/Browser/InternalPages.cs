@@ -14,10 +14,11 @@ namespace ChromiumBrowser.Browser;
 /// button works on them, and the list scrolls the way a page scrolls rather than
 /// the way a grid control does.
 ///
-/// There is no scripting in them and no bridge into the program. Anything that
+/// There is no privileged JavaScript bridge into the program. Anything that
 /// acts — clearing the list, opening a file's folder — is a plain link back to
 /// the same scheme with a query on it, which this class reads and carries out
-/// before drawing the page again. A form with a text box does the searching, by
+/// before drawing the page again. Downloads poll their own canonical page for
+/// progress; action queries are removed before polling. A form does searching, by
 /// the same route. That keeps the pages readable, and keeps the surface between
 /// a web page and this program down to what can be written in an address.
 /// </summary>
@@ -52,7 +53,10 @@ public sealed class InternalPages
     }
 
     /// <summary>The page for an address, after doing whatever the address asked for.</summary>
-    public string Render(Uri address)
+    public InternalPages WithDownloads(DownloadStore downloads) =>
+        new(_history, downloads, _settings, _bookmarks, _session, _reveal);
+
+    public string Render(Uri address, Action<string>? retryDownload = null)
     {
         Dictionary<string, string> query = ParseQuery(address.Query);
         string page = address.Host.Length > 0 ? address.Host : address.AbsolutePath.Trim('/');
@@ -60,7 +64,7 @@ public sealed class InternalPages
         return page switch
         {
             "history" => History(query),
-            "downloads" => Downloads(query),
+            "downloads" => Downloads(query, retryDownload),
             "settings" => SettingsPage(query),
             "private" => PrivatePage(),
             _ => Document(Strings.Of("page.notFound"), $"<p class=\"empty\">{Strings.Of("page.notFound")}</p>"),
@@ -134,8 +138,16 @@ public sealed class InternalPages
         return Document(Strings.Of("page.history"), body.ToString());
     }
 
-    private string Downloads(Dictionary<string, string> query)
+    private string Downloads(Dictionary<string, string> query, Action<string>? retryDownload)
     {
+        if (query.TryGetValue("id", out string? id) && Guid.TryParse(id, out Guid key)
+            && query.TryGetValue("command", out string? command))
+        {
+            DownloadRecord? record = _downloads.All.FirstOrDefault(d => d.Key == key);
+            if (command == "retry" && record is { State: DownloadState.Cancelled or DownloadState.Interrupted })
+                retryDownload?.Invoke(record.Url);
+            else _downloads.Command(key, command);
+        }
         if (query.ContainsKey("clear"))
         {
             _downloads.Clear();
@@ -156,17 +168,17 @@ public sealed class InternalPages
             </div>
             """);
 
+        body.Append("<ul class=\"list\">");
         if (records.Count == 0)
         {
-            body.Append($"<p class=\"empty\">{Strings.Of("downloads.empty")}</p>");
-            return Document(Strings.Of("page.downloads"), body.ToString());
+            body.Append($"<li class=\"empty\">{Strings.Of("downloads.empty")}</li>");
         }
 
-        body.Append("<ul class=\"list\">");
         foreach (DownloadRecord record in records)
         {
             string state = record.State switch
             {
+                DownloadState.InProgress when record.IsPaused => Strings.Of("downloads.paused"),
                 DownloadState.Completed => Size(record.ReceivedBytes),
                 DownloadState.InProgress => record.Progress is { } fraction
                     ? $"{fraction:P0} {Strings.Of("downloads.of")} {Size(record.TotalBytes)}"
@@ -179,6 +191,14 @@ public sealed class InternalPages
                 ? $"<a class=\"link\" href=\"{Scheme}://downloads?reveal={Uri.EscapeDataString(record.Path)}\">{Strings.Of("downloads.reveal")}</a>"
                 : string.Empty;
 
+            string CommandLink(string command, string text) =>
+                $"<a class=\"link\" href=\"{Scheme}://downloads?id={record.Key}&amp;command={command}\">{Strings.Of(text)}</a>";
+            if (record.State == DownloadState.InProgress)
+                action += CommandLink(record.IsPaused ? "resume" : "pause", record.IsPaused ? "downloads.resume" : "downloads.pause")
+                    + " " + CommandLink("cancel", "downloads.cancel");
+            else if (record.State is DownloadState.Cancelled or DownloadState.Interrupted)
+                action += CommandLink("retry", "downloads.retry");
+
             body.Append($"""
                 <li>
                   <span class="file">{Escape(record.FileName)}</span>
@@ -190,6 +210,30 @@ public sealed class InternalPages
         }
 
         body.Append("</ul>");
+        // Always refresh the canonical URL, never replay an action query.
+        body.Append($$"""
+            <script>
+            history.replaceState(null, '', '{{Scheme}}://downloads');
+            let pending = false;
+            setInterval(async () => {
+              if (pending || document.hidden) return;
+              pending = true;
+              try {
+                const response = await fetch('{{Scheme}}://downloads', {cache:'no-store'});
+                if (!response.ok) return;
+                const page = new DOMParser().parseFromString(await response.text(), 'text/html');
+                const list = document.querySelector('.list');
+                const fresh = page.querySelector('.list');
+                const focused = document.activeElement?.href;
+                if (list && fresh && list.innerHTML !== fresh.innerHTML) {
+                  list.innerHTML = fresh.innerHTML;
+                  if (focused) [...list.querySelectorAll('a')].find(a => a.href === focused)?.focus({preventScroll:true});
+                }
+              } catch (_) { /* retry on the next tick */ }
+              finally { pending = false; }
+            }, 1000);
+            </script>
+            """);
         return Document(Strings.Of("page.downloads"), body.ToString());
     }
 

@@ -1,6 +1,8 @@
 using System.Drawing.Drawing2D;
 using ChromiumBrowser.Core.Ui;
 using ChromiumBrowser.Ui;
+using ChromiumBrowser.Native;
+using ChromiumBrowser.Core.Localisation;
 
 namespace ChromiumBrowser.Controls;
 
@@ -13,6 +15,8 @@ public sealed class TabItem
 
     /// <summary>The site's own icon, once it has arrived.</summary>
     public Image? Icon { get; set; }
+    public bool IsMuted { get; set; }
+    public bool IsAudible { get; set; }
 }
 
 /// <summary>
@@ -43,12 +47,18 @@ public sealed class TabStripControl : Control
     private bool _dragging;
     private int _dragOffsetInTab;
     private int _dragX;
+    private readonly ToolTip _tip = new();
+    private readonly System.Windows.Forms.Timer _animation = new() { Interval = 80 };
 
     public TabStripControl()
     {
         DoubleBuffered = true;
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
         Font = new Font("Segoe UI", 9f);
+        AccessibleRole = AccessibleRole.PageTabList;
+        TabStop = true;
+        _animation.Tick += (_, _) => { if (_tabs.Any(t => t.IsLoading)) Invalidate(); };
+        _animation.Start();
     }
 
     public IReadOnlyList<TabItem> Tabs => _tabs;
@@ -79,6 +89,8 @@ public sealed class TabStripControl : Control
 
     /// <summary>Raised after a tab has been dragged to a new position.</summary>
     public event EventHandler<(int From, int To)>? TabMoved;
+    public event EventHandler<(int Index, Point At)>? TabMenuRequested;
+    public event EventHandler<int>? MuteRequested;
 
     /// <summary>
     /// Pressed on the empty part of the strip. That area belongs to the window
@@ -104,6 +116,12 @@ public sealed class TabStripControl : Control
     private float UiScale => DeviceDpi / 96f;
 
     private int NewTabWidth => (int)(36 * UiScale);
+    private int LayoutWidth => Math.Max(NewTabWidth, Width - LeftInset - (int)(72 * UiScale));
+    public Rectangle NewTabBounds => new(CurrentLayout().NewTabX, 0, NewTabWidth, Height);
+    private Rectangle TabViewport => new(LeftInset, 0,
+        Math.Max(0, CurrentLayout().NewTabX - LeftInset), Height);
+    private int TabAt(Point point) => TabViewport.Contains(point)
+        ? TabStripLayout.HitTest(CurrentLayout(), point.X) : -1;
 
     public void AddTab(TabItem tab, bool select = true)
     {
@@ -137,6 +155,7 @@ public sealed class TabStripControl : Control
         }
 
         _hoverTab = -1;
+        EnsureVisible(_selected);
         Invalidate();
     }
 
@@ -155,7 +174,7 @@ public sealed class TabStripControl : Control
     private TabStripBounds CurrentLayout()
     {
         TabStripBounds strip = TabStripLayout.Compute(
-            Math.Max(1, _tabs.Count), Width - LeftInset, NewTabWidth, _scrollOffset);
+            Math.Max(1, _tabs.Count), LayoutWidth, NewTabWidth, _scrollOffset, UiScale);
 
         TabBounds[] shifted = new TabBounds[strip.Tabs.Length];
         for (int index = 0; index < shifted.Length; index++)
@@ -169,7 +188,45 @@ public sealed class TabStripControl : Control
     private void EnsureVisible(int index)
     {
         _scrollOffset = TabStripLayout.ScrollToShow(
-            index, Math.Max(1, _tabs.Count), Width, NewTabWidth, _scrollOffset);
+            index, Math.Max(1, _tabs.Count), LayoutWidth, NewTabWidth, _scrollOffset, UiScale);
+    }
+
+    protected override void OnResize(EventArgs e)
+    {
+        base.OnResize(e);
+        EnsureVisible(_selected);
+    }
+
+    protected override void OnDpiChangedAfterParent(EventArgs e)
+    {
+        base.OnDpiChangedAfterParent(e);
+        EnsureVisible(_selected);
+        Invalidate();
+    }
+
+    public void MoveTab(int from, int to)
+    {
+        if (from < 0 || from >= _tabs.Count || to < 0 || to >= _tabs.Count || from == to) return;
+        TabItem selected = _tabs[_selected];
+        TabItem moved = _tabs[from];
+        _tabs.RemoveAt(from);
+        _tabs.Insert(to, moved);
+        _selected = _tabs.IndexOf(selected);
+        TabMoved?.Invoke(this, (from, to));
+        EnsureVisible(_selected);
+        SelectedIndexChanged?.Invoke(this, EventArgs.Empty);
+        Invalidate();
+    }
+
+    protected override void WndProc(ref Message m)
+    {
+        if (m.Msg == Win32.WM_NCHITTEST && DragArea.Contains(PointToClient(Win32.ScreenPoint(m.LParam))))
+        {
+            // Let the top-level window own the complete native caption gesture.
+            m.Result = Win32.HTTRANSPARENT;
+            return;
+        }
+        base.WndProc(ref m);
     }
 
     // ------------------------------------------------------------------ input
@@ -209,7 +266,7 @@ public sealed class TabStripControl : Control
         }
 
         TabStripBounds bounds = CurrentLayout();
-        int tab = TabStripLayout.HitTest(bounds, e.X);
+        int tab = TabAt(e.Location);
         bool close = tab >= 0 && CloseRect(bounds.Tabs[tab]).Contains(e.Location);
         bool newTab = e.X >= bounds.NewTabX && e.X < bounds.NewTabX + NewTabWidth;
 
@@ -218,6 +275,7 @@ public sealed class TabStripControl : Control
             _hoverTab = tab;
             _hoverClose = close;
             _hoverNewTab = newTab;
+            _tip.SetToolTip(this, tab >= 0 ? _tabs[tab].Title : newTab ? Strings.Of("menu.newTab") + " (Ctrl+T)" : string.Empty);
             Invalidate();
         }
     }
@@ -238,7 +296,13 @@ public sealed class TabStripControl : Control
     {
         base.OnMouseDown(e);
         TabStripBounds strip = CurrentLayout();
-        int tab = TabStripLayout.HitTest(strip, e.X);
+        int tab = TabAt(e.Location);
+
+        if (e.Button == MouseButtons.Right)
+        {
+            TabMenuRequested?.Invoke(this, (tab, e.Location));
+            return;
+        }
 
         if (e.Button == MouseButtons.Middle)
         {
@@ -264,6 +328,12 @@ public sealed class TabStripControl : Control
         if (tab < 0)
         {
             EmptyAreaPressed?.Invoke(this, EventArgs.Empty);
+            return;
+        }
+
+        if ((_tabs[tab].IsMuted || _tabs[tab].IsAudible) && AudioRect(strip.Tabs[tab]).Contains(e.Location))
+        {
+            MuteRequested?.Invoke(this, tab);
             return;
         }
 
@@ -293,7 +363,7 @@ public sealed class TabStripControl : Control
     protected override void OnMouseDoubleClick(MouseEventArgs e)
     {
         base.OnMouseDoubleClick(e);
-        if (e.Button == MouseButtons.Left && TabStripLayout.HitTest(CurrentLayout(), e.X) < 0)
+        if (e.Button == MouseButtons.Left && DragArea.Contains(e.Location))
         {
             EmptyAreaDoubleClicked?.Invoke(this, EventArgs.Empty);
         }
@@ -325,6 +395,62 @@ public sealed class TabStripControl : Control
             size);
     }
 
+    protected override void OnMouseCaptureChanged(EventArgs e)
+    {
+        base.OnMouseCaptureChanged(e);
+        if (!Capture) { _pressedTab = -1; _dragging = false; Invalidate(); }
+    }
+
+    private Rectangle AudioRect(TabBounds tab) => new(tab.X + (int)(10 * UiScale),
+        (Height - (int)(20 * UiScale)) / 2, (int)(20 * UiScale), (int)(20 * UiScale));
+
+    protected override bool IsInputKey(Keys keyData) =>
+        (keyData & Keys.KeyCode) is Keys.Left or Keys.Right or Keys.Home or Keys.End || base.IsInputKey(keyData);
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        switch (e.KeyCode)
+        {
+            case Keys.Left: SelectedIndex--; break;
+            case Keys.Right: SelectedIndex++; break;
+            case Keys.Home: SelectedIndex = 0; break;
+            case Keys.End: SelectedIndex = _tabs.Count - 1; break;
+            case Keys.Delete: TabCloseRequested?.Invoke(this, _selected); break;
+            case Keys.Apps:
+            case Keys.F10 when e.Shift:
+                TabMenuRequested?.Invoke(this, (_selected, new Point(0, Height))); break;
+            default: return;
+        }
+        e.Handled = e.SuppressKeyPress = true;
+    }
+
+    protected override AccessibleObject CreateAccessibilityInstance() => new AccessibleActions(this, () =>
+    {
+        List<AccessibleActions.Item> items = [];
+        TabStripBounds bounds = CurrentLayout();
+        for (int i = 0; i < _tabs.Count; i++)
+        {
+            int index = i;
+            Rectangle rect = Rectangle.Intersect(TabViewport, new Rectangle(bounds.Tabs[i].X, 0, bounds.Tabs[i].Width, Height));
+            items.Add(new(_tabs[i].Title, rect, () => SelectedIndex = index, AccessibleRole.PageTab,
+                index == _selected ? AccessibleStates.Selected : AccessibleStates.None));
+            items.Add(new(Strings.Of("menu.closeTab"), Rectangle.Intersect(TabViewport, CloseRect(bounds.Tabs[i])),
+                () => TabCloseRequested?.Invoke(this, index)));
+            if (_tabs[i].IsMuted || _tabs[i].IsAudible)
+                items.Add(new(Strings.Of(_tabs[i].IsMuted ? "tab.unmute" : "tab.mute"),
+                    Rectangle.Intersect(TabViewport, AudioRect(bounds.Tabs[i])), () => MuteRequested?.Invoke(this, index)));
+        }
+        items.Add(new(Strings.Of("menu.newTab"), NewTabBounds, () => NewTabRequested?.Invoke(this, EventArgs.Empty)));
+        return items;
+    });
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) { _animation.Dispose(); _tip.Dispose(); }
+        base.Dispose(disposing);
+    }
+
     protected override void OnPaint(PaintEventArgs e)
     {
         Palette palette = Theme.Current;
@@ -333,6 +459,9 @@ public sealed class TabStripControl : Control
         g.Clear(palette.Chrome);
 
         TabStripBounds strip = CurrentLayout();
+
+        var saved = g.Save();
+        g.SetClip(TabViewport);
 
         for (int index = 0; index < _tabs.Count; index++)
         {
@@ -350,6 +479,7 @@ public sealed class TabStripControl : Control
             DrawTab(g, palette, held, _pressedTab, lifted: true);
         }
 
+        g.Restore(saved);
         DrawNewTabButton(g, palette, strip.NewTabX);
     }
 
@@ -388,7 +518,13 @@ public sealed class TabStripControl : Control
         int iconTop = (Height - iconSize) / 2;
 
         TabItem tab = _tabs[index];
-        if (tab.IsLoading)
+        if (tab.IsMuted || tab.IsAudible)
+        {
+            TextRenderer.DrawText(g, tab.IsMuted ? "×♪" : "♪", Font, AudioRect(bounds), palette.Accent,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            left += iconSize + (int)(8 * UiScale);
+        }
+        else if (tab.IsLoading)
         {
             DrawSpinner(g, palette, new Rectangle(left, iconTop, iconSize, iconSize));
             left += iconSize + (int)(8 * UiScale);

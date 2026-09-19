@@ -521,6 +521,41 @@ string Scratch()
     Strings.Use("en");
 }
 
+// Audit regressions: crowded layouts and observable shared state.
+{
+    foreach (float scale in new[] { 1f, 1.5f, 2f })
+    {
+        int available = (int)(500 * scale), plus = (int)(36 * scale);
+        int offset = TabStripLayout.ScrollToShow(29, 30, available, plus, 999999, scale);
+        TabStripBounds layout = TabStripLayout.Compute(30, available, plus, offset, scale);
+        Check($"audit: plus stays visible at {scale} scale", layout.NewTabX + plus == available);
+        Check($"audit: last tab remains visible at {scale} scale", layout.Tabs[^1].X >= 0
+            && layout.Tabs[^1].X + layout.Tabs[^1].Width == layout.NewTabX);
+        Check($"audit: minimum tab width scales at {scale}", layout.Tabs[0].Width == (int)(66 * scale));
+    }
+    BookmarkStore bookmarks = new(string.Empty);
+    int changes = 0;
+    bookmarks.Changed += (_, _) => changes++;
+    bookmarks.Add("https://a.test", "A");
+    bookmarks.Rename("https://a.test", "Renamed");
+    bookmarks.Remove("https://a.test");
+    Check("audit: bookmark mutations notify all listeners", changes == 3);
+
+    DownloadStore downloads = new(string.Empty);
+    DownloadRecord record = downloads.Begin(17, "https://a.test/file", "file", 100);
+    int disposed = 0;
+    string command = "";
+    downloads.SetControl(17, text => command = text, () => disposed++);
+    Check("audit: pause targets active download", downloads.Command(record.Key, "pause") && command == "pause" && downloads.All[0].IsPaused);
+    Check("audit: resume clears pause state", downloads.Command(record.Key, "resume") && !downloads.All[0].IsPaused);
+    Check("audit: unknown control is rejected", !downloads.Command(Guid.NewGuid(), "cancel") && !downloads.Command(record.Key, "anything"));
+    downloads.Progressed(17, 40, 100, "partial");
+    downloads.Interrupt(17);
+    Check("audit: closing owner cancels and records interruption", command == "cancel"
+        && downloads.All[0].State == DownloadState.Interrupted && downloads.All[0].ReceivedBytes == 40);
+    Check("audit: callbacks released when download ends", disposed == 1 && !downloads.Command(record.Key, "pause"));
+}
+
 Console.WriteLine();
 Console.WriteLine($"{total - failures}/{total} passed");
 return failures == 0 ? 0 : 1;

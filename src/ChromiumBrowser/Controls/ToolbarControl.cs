@@ -1,5 +1,6 @@
 using System.Drawing.Drawing2D;
 using ChromiumBrowser.Ui;
+using ChromiumBrowser.Core.Localisation;
 
 namespace ChromiumBrowser.Controls;
 
@@ -17,17 +18,23 @@ public sealed class ToolbarControl : Control
     private readonly TextBox _address = new()
     {
         BorderStyle = BorderStyle.None,
-        AutoCompleteMode = AutoCompleteMode.None,
+        AutoCompleteMode = AutoCompleteMode.SuggestAppend,
+        AutoCompleteSource = AutoCompleteSource.CustomSource,
     };
 
     private int _hover = -1;
     private bool _isPrivate;
+    private readonly ToolTip _tip = new();
+    private string _currentAddress = string.Empty;
+    private bool _selectOnMouseUp;
+    private int _keyboardButton;
 
     public ToolbarControl()
     {
         DoubleBuffered = true;
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
         Font = new Font("Segoe UI", 9f);
+        TabStop = true;
 
         _address.KeyDown += (_, e) =>
         {
@@ -46,21 +53,28 @@ public sealed class ToolbarControl : Control
 
         // Clicking into the bar selects what is there, so typing replaces the
         // address rather than appending to it.
-        _address.GotFocus += (_, _) => _address.SelectAll();
+        _address.GotFocus += (_, _) =>
+        {
+            _selectOnMouseUp = Control.MouseButtons.HasFlag(MouseButtons.Left);
+            AddressFocused?.Invoke(this, EventArgs.Empty);
+            _address.SelectAll();
+            Invalidate();
+        };
         _address.MouseUp += (_, _) =>
         {
-            if (_address.SelectionLength == 0 && !_userEdited)
+            if (_selectOnMouseUp)
             {
                 _address.SelectAll();
+                _selectOnMouseUp = false;
             }
         };
-        _address.TextChanged += (_, _) => _userEdited = true;
+        _address.LostFocus += (_, _) => { _selectOnMouseUp = false; _address.Text = _currentAddress; Invalidate(); };
 
         Controls.Add(_address);
         ApplyTheme();
     }
 
-    private bool _userEdited;
+    public event EventHandler? AddressFocused;
 
     public event EventHandler? BackRequested;
 
@@ -113,15 +127,31 @@ public sealed class ToolbarControl : Control
     }
 
     /// <summary>Shows an address without treating it as something the user typed.</summary>
-    public void ShowAddress(string address)
+    public void ShowAddress(string address, bool force = false)
     {
-        if (_address.Focused)
+        _currentAddress = address;
+        if (_address.Focused && !force)
         {
             return; // never pull the text out from under someone typing
         }
 
         _address.Text = address;
-        _userEdited = false;
+    }
+
+    public bool AddressHasFocus => _address.Focused;
+
+    public void CancelAddressEdit()
+    {
+        _address.Text = _currentAddress;
+        _address.SelectAll();
+    }
+
+    public void SetSuggestions(IEnumerable<string> addresses)
+    {
+        AutoCompleteStringCollection source = new();
+        source.AddRange(addresses.Where(a => !string.IsNullOrWhiteSpace(a))
+            .Distinct(StringComparer.Ordinal).Take(500).ToArray());
+        _address.AutoCompleteCustomSource = source;
     }
 
     public void FocusAddress()
@@ -136,6 +166,7 @@ public sealed class ToolbarControl : Control
         BackColor = palette.Chrome;
         _address.BackColor = Theme.IsDark ? palette.Hover : palette.Surface;
         _address.ForeColor = palette.Text;
+        _address.AccessibleName = Strings.Of("toolbar.address");
         Invalidate();
     }
 
@@ -219,6 +250,7 @@ public sealed class ToolbarControl : Control
         if (hover != _hover)
         {
             _hover = hover;
+            _tip.SetToolTip(this, hover >= 0 ? ButtonName(hover) : string.Empty);
             Invalidate();
         }
     }
@@ -241,7 +273,14 @@ public sealed class ToolbarControl : Control
             return;
         }
 
-        switch (_hover)
+        int hit = Enumerable.Range(0, 4).FirstOrDefault(i => ButtonRect(i).Contains(e.Location), -1);
+        if (MenuRect.Contains(e.Location)) hit = MenuButton;
+        InvokeButton(hit);
+    }
+
+    private void InvokeButton(int button)
+    {
+        switch (button)
         {
             case 0 when CanGoBack: BackRequested?.Invoke(this, EventArgs.Empty); break;
             case 1 when CanGoForward: ForwardRequested?.Invoke(this, EventArgs.Empty); break;
@@ -257,6 +296,41 @@ public sealed class ToolbarControl : Control
         }
     }
 
+    private string ButtonName(int button) => Strings.Of(button switch
+    {
+        0 => "toolbar.back", 1 => "toolbar.forward", 2 => IsLoading ? "toolbar.stop" : "toolbar.reload",
+        3 => "toolbar.home", _ => "toolbar.menu",
+    });
+
+    protected override bool IsInputKey(Keys keys) =>
+        (keys & Keys.KeyCode) is Keys.Left or Keys.Right || base.IsInputKey(keys);
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (e.KeyCode == Keys.Left) _keyboardButton = Math.Max(0, _keyboardButton - 1);
+        else if (e.KeyCode == Keys.Right) _keyboardButton = Math.Min(4, _keyboardButton + 1);
+        else if (e.KeyCode is Keys.Enter or Keys.Space) InvokeButton(_keyboardButton == 4 ? MenuButton : _keyboardButton);
+        else return;
+        e.Handled = e.SuppressKeyPress = true;
+        Invalidate();
+    }
+
+    protected override AccessibleObject CreateAccessibilityInstance() => new AccessibleActions(this, () =>
+        Enumerable.Range(0, 5).Select(i =>
+        {
+            int button = i == 4 ? MenuButton : i;
+            return new AccessibleActions.Item(ButtonName(button), i == 4 ? MenuRect : ButtonRect(i),
+                () => InvokeButton(button), State: (i == 0 && !CanGoBack) || (i == 1 && !CanGoForward)
+                    ? AccessibleStates.Unavailable : AccessibleStates.None);
+        }).ToArray());
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) _tip.Dispose();
+        base.Dispose(disposing);
+    }
+
     protected override void OnPaint(PaintEventArgs e)
     {
         Palette palette = Theme.Current;
@@ -269,6 +343,7 @@ public sealed class ToolbarControl : Control
         DrawButton(g, palette, 2, enabled: true);
         DrawButton(g, palette, 3, enabled: true);
         DrawMenuButton(g, palette);
+        if (Focused) ControlPaint.DrawFocusRectangle(g, _keyboardButton == 4 ? MenuRect : ButtonRect(_keyboardButton));
 
         DrawBadge(g, palette);
 

@@ -44,21 +44,23 @@ public static class TabStripLayout
     /// <param name="available">The room the strip has, in pixels.</param>
     /// <param name="newTabWidth">The width of the button that opens another tab.</param>
     /// <param name="scrollOffset">How far the strip is scrolled, when it scrolls.</param>
-    public static TabStripBounds Compute(int tabCount, int available, int newTabWidth, int scrollOffset = 0)
+    public static TabStripBounds Compute(int tabCount, int available, int newTabWidth, int scrollOffset = 0, float scale = 1)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(tabCount, 1);
 
         int room = Math.Max(0, available - newTabWidth);
+        int minimum = Math.Max(1, (int)(MinTabWidth * scale));
+        int maximum = Math.Max(minimum, (int)(MaxTabWidth * scale));
         int ideal = room / tabCount;
 
-        if (ideal >= MinTabWidth)
+        if (ideal >= minimum)
         {
-            int width = Math.Min(ideal, MaxTabWidth);
+            int width = Math.Min(ideal, maximum);
 
             // Only spread the remainder when the tabs are actually filling the
             // strip. Once they are at their full width the leftover belongs to
             // the empty space on the right, not to the tabs.
-            int remainder = width == MaxTabWidth ? 0 : room - (width * tabCount);
+            int remainder = width == maximum ? 0 : room - (width * tabCount);
 
             TabBounds[] tabs = new TabBounds[tabCount];
             int x = 0;
@@ -78,10 +80,10 @@ public static class TabStripLayout
             TabBounds[] tabs = new TabBounds[tabCount];
             for (int index = 0; index < tabCount; index++)
             {
-                tabs[index] = new TabBounds(index, (index * MinTabWidth) - scrollOffset, MinTabWidth);
+                tabs[index] = new TabBounds(index, (index * minimum) - scrollOffset, minimum);
             }
 
-            return new TabStripBounds(tabs, (tabCount * MinTabWidth) - scrollOffset, Scrolls: true);
+            return new TabStripBounds(tabs, room, Scrolls: true);
         }
     }
 
@@ -91,17 +93,20 @@ public static class TabStripLayout
     /// <param name="available">The room the strip has.</param>
     /// <param name="newTabWidth">The width of the new-tab button.</param>
     /// <param name="currentOffset">Where the strip is scrolled to now.</param>
-    public static int ScrollToShow(int index, int tabCount, int available, int newTabWidth, int currentOffset)
+    public static int ScrollToShow(int index, int tabCount, int available, int newTabWidth, int currentOffset, float scale = 1)
     {
-        TabStripBounds strip = Compute(tabCount, available, newTabWidth, currentOffset);
+        TabStripBounds strip = Compute(tabCount, available, newTabWidth, currentOffset, scale);
         if (!strip.Scrolls)
         {
             return 0;
         }
 
-        int left = index * MinTabWidth;
-        int right = left + MinTabWidth;
+        int minimum = Math.Max(1, (int)(MinTabWidth * scale));
+        index = Math.Clamp(index, 0, tabCount - 1);
+        int left = index * minimum;
+        int right = left + minimum;
         int visible = Math.Max(0, available - newTabWidth);
+        currentOffset = Math.Clamp(currentOffset, 0, Math.Max(0, tabCount * minimum - visible));
 
         if (left - currentOffset < 0)
         {

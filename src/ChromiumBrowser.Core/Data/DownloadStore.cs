@@ -14,6 +14,8 @@ public enum DownloadState
 /// <summary>One download, as the list shows it.</summary>
 public sealed record DownloadRecord
 {
+    public Guid Key { get; init; } = Guid.NewGuid();
+    public bool IsPaused { get; init; }
     public required string Url { get; init; }
 
     public required string FileName { get; init; }
@@ -53,6 +55,8 @@ public sealed class DownloadStore
     private readonly string _path;
     private readonly List<DownloadRecord> _records;
     private readonly Dictionary<int, DownloadRecord> _live = [];
+    private readonly Dictionary<int, (Action<string> Execute, Action Dispose)> _controls = [];
+    public event EventHandler? Changed;
 
     public DownloadStore(string path)
     {
@@ -63,7 +67,7 @@ public sealed class DownloadStore
         {
             if (_records[index].State == DownloadState.InProgress)
             {
-                _records[index] = _records[index] with { State = DownloadState.Interrupted };
+                _records[index] = _records[index] with { State = DownloadState.Interrupted, IsPaused = false };
             }
         }
     }
@@ -73,6 +77,7 @@ public sealed class DownloadStore
     /// <summary>Notes a download the engine has just begun.</summary>
     public DownloadRecord Begin(int id, string url, string fileName, long totalBytes)
     {
+        if (_live.TryGetValue(id, out DownloadRecord? existing)) return existing;
         DownloadRecord record = new()
         {
             Url = url,
@@ -100,6 +105,7 @@ public sealed class DownloadStore
             TotalBytes = totalBytes > 0 ? totalBytes : record.TotalBytes,
             Path = string.IsNullOrEmpty(path) ? record.Path : path,
         });
+        Changed?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>Ends one, which is worth writing down.</summary>
@@ -116,10 +122,44 @@ public sealed class DownloadStore
             ReceivedBytes = receivedBytes,
             Path = string.IsNullOrEmpty(path) ? record.Path : path,
             Finished = DateTimeOffset.Now,
+            IsPaused = false,
         });
 
         _live.Remove(id);
+        ReleaseControl(id);
         Save();
+    }
+
+    public void SetControl(int id, Action<string> execute, Action dispose)
+    {
+        ReleaseControl(id);
+        _controls[id] = (execute, dispose);
+    }
+
+    public void ReleaseControl(int id)
+    {
+        if (_controls.Remove(id, out var control)) control.Dispose();
+    }
+
+    public bool Command(Guid key, string command)
+    {
+        var active = _live.FirstOrDefault(pair => pair.Value.Key == key);
+        if (active.Value is null || !_controls.TryGetValue(active.Key, out var control)
+            || command is not ("pause" or "resume" or "cancel")) return false;
+        control.Execute(command);
+        if (command != "cancel") Replace(active.Key, active.Value with { IsPaused = command == "pause" });
+        Changed?.Invoke(this, EventArgs.Empty);
+        return true;
+    }
+
+    public void Interrupt(int id)
+    {
+        if (_live.TryGetValue(id, out var record))
+        {
+            if (_controls.TryGetValue(id, out var control)) control.Execute("cancel");
+            Finish(id, DownloadState.Interrupted, record.ReceivedBytes, record.Path);
+        }
+        else ReleaseControl(id);
     }
 
     public void Clear()
@@ -144,5 +184,9 @@ public sealed class DownloadStore
         _live[id] = updated;
     }
 
-    private void Save() => JsonStore.Save(_path, _records);
+    private void Save()
+    {
+        JsonStore.Save(_path, _records);
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
 }

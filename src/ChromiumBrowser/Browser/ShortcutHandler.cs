@@ -25,6 +25,13 @@ public enum BrowserCommand
     FindInPage,
     FindNext,
     FindPrevious,
+    ReopenTab,
+    Back,
+    Forward,
+    HardReload,
+    Escape,
+    Fullscreen,
+    Tab1, Tab2, Tab3, Tab4, Tab5, Tab6, Tab7, Tab8, LastTab,
 }
 
 /// <summary>
@@ -45,8 +52,13 @@ public enum BrowserCommand
 public sealed class ShortcutHandler : IKeyboardHandler
 {
     private readonly Action<BrowserCommand> _invoke;
+    private readonly Func<bool> _handleEscape;
 
-    public ShortcutHandler(Action<BrowserCommand> invoke) => _invoke = invoke;
+    public ShortcutHandler(Action<BrowserCommand> invoke, Func<bool>? handleEscape = null)
+    {
+        _invoke = invoke;
+        _handleEscape = handleEscape ?? (() => false);
+    }
 
     public bool OnPreKeyEvent(
         IWebBrowser browser,
@@ -66,11 +78,13 @@ public sealed class ShortcutHandler : IKeyboardHandler
         bool control = modifiers.HasFlag(CefEventFlags.ControlDown);
         bool shift = modifiers.HasFlag(CefEventFlags.ShiftDown);
 
-        BrowserCommand? shortcut = Match(windowsKeyCode, control, shift);
+        BrowserCommand? shortcut = Match(windowsKeyCode, control, shift, modifiers.HasFlag(CefEventFlags.AltDown));
         if (shortcut is null)
         {
             return false;
         }
+
+        if (shortcut == BrowserCommand.Escape && !browser.IsLoading && !_handleEscape()) return false;
 
         _invoke(shortcut.Value);
         return true;
@@ -86,26 +100,43 @@ public sealed class ShortcutHandler : IKeyboardHandler
         bool isSystemKey) => false;
 
     /// <summary>The one table both this handler and the window's own keys read from.</summary>
-    public static BrowserCommand? Match(int keyCode, bool control, bool shift) => (Keys)keyCode switch
+    public static BrowserCommand? Match(int keyCode, bool control, bool shift, bool alt = false)
     {
-        Keys.F5 when !control => BrowserCommand.Reload,
-        Keys.F3 when shift => BrowserCommand.FindPrevious,
-        Keys.F3 => BrowserCommand.FindNext,
-        Keys.F when control => BrowserCommand.FindInPage,
+        if (alt)
+            return !control && !shift ? (Keys)keyCode switch
+            {
+                Keys.Left => BrowserCommand.Back, Keys.Right => BrowserCommand.Forward, _ => null,
+            } : null;
+
+        return (Keys)keyCode switch
+        {
+        Keys.F11 when !control && !shift => BrowserCommand.Fullscreen,
+        Keys.Escape when !control && !shift => BrowserCommand.Escape,
+        Keys.F6 when !control && !shift => BrowserCommand.FocusAddress,
+        Keys.F5 when control || shift => BrowserCommand.HardReload,
+        Keys.F5 => BrowserCommand.Reload,
+        Keys.F3 when !control && shift => BrowserCommand.FindPrevious,
+        Keys.F3 when !control => BrowserCommand.FindNext,
+        Keys.F when control && !shift => BrowserCommand.FindInPage,
         Keys.Tab when control && shift => BrowserCommand.PreviousTab,
         Keys.Tab when control => BrowserCommand.NextTab,
+        Keys.T when control && shift => BrowserCommand.ReopenTab,
         Keys.T when control => BrowserCommand.NewTab,
         Keys.N when control && shift => BrowserCommand.NewPrivateWindow,
         Keys.N when control => BrowserCommand.NewWindow,
-        Keys.W when control => BrowserCommand.CloseTab,
-        Keys.L when control => BrowserCommand.FocusAddress,
+        Keys.W when control && !shift => BrowserCommand.CloseTab,
+        Keys.L when control && !shift => BrowserCommand.FocusAddress,
+        Keys.R when control && shift => BrowserCommand.HardReload,
         Keys.R when control => BrowserCommand.Reload,
-        Keys.P when control => BrowserCommand.Print,
-        Keys.D when control => BrowserCommand.BookmarkPage,
-        Keys.H when control => BrowserCommand.ShowHistory,
-        Keys.J when control => BrowserCommand.ShowDownloads,
+        Keys.P when control && !shift => BrowserCommand.Print,
+        Keys.D when control && !shift => BrowserCommand.BookmarkPage,
+        Keys.H when control && !shift => BrowserCommand.ShowHistory,
+        Keys.J when control && !shift => BrowserCommand.ShowDownloads,
         Keys.B when control && shift => BrowserCommand.ToggleBookmarksBar,
-        Keys.D0 or Keys.NumPad0 when control => BrowserCommand.ZoomReset,
+        Keys.D0 or Keys.NumPad0 when control && !shift => BrowserCommand.ZoomReset,
+        >= Keys.D1 and <= Keys.D8 when control && !shift =>
+            BrowserCommand.Tab1 + (keyCode - (int)Keys.D1),
+        Keys.D9 when control && !shift => BrowserCommand.LastTab,
 
         // The plus and minus keys arrive under several names depending on
         // whether the number pad or the row above the letters was used, and on
@@ -113,5 +144,6 @@ public sealed class ShortcutHandler : IKeyboardHandler
         Keys.Add or Keys.Oemplus when control => BrowserCommand.ZoomIn,
         Keys.Subtract or Keys.OemMinus when control => BrowserCommand.ZoomOut,
         _ => null,
-    };
+        };
+    }
 }

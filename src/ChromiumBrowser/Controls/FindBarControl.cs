@@ -31,6 +31,7 @@ public sealed class FindBarControl : Control
 
     private string _counter = string.Empty;
     private int _hover = -1;
+    private readonly ToolTip _tip = new();
 
     public FindBarControl()
     {
@@ -100,6 +101,7 @@ public sealed class FindBarControl : Control
         _search.BackColor = Theme.IsDark ? palette.Hover : palette.Surface;
         _search.ForeColor = palette.Text;
         _search.PlaceholderText = Strings.Of("find.placeholder");
+        _search.AccessibleName = Strings.Of("find.placeholder");
         Invalidate();
     }
 
@@ -160,8 +162,27 @@ public sealed class FindBarControl : Control
         if (hover != _hover)
         {
             _hover = hover;
+            _tip.SetToolTip(this, hover >= 0 ? ButtonName(hover) : string.Empty);
             Invalidate();
         }
+    }
+
+    private static string ButtonName(int index) => Strings.Of(index switch
+    {
+        0 => "find.previous", 1 => "find.next", _ => "find.close",
+    });
+
+    protected override AccessibleObject CreateAccessibilityInstance() => new AccessibleActions(this, () =>
+        Enumerable.Range(0, 3).Select(i => new AccessibleActions.Item(ButtonName(i), ButtonRect(i), () =>
+        {
+            if (i == 2) CloseRequested?.Invoke(this, EventArgs.Empty);
+            else Step(i == 1);
+        })).ToArray());
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) _tip.Dispose();
+        base.Dispose(disposing);
     }
 
     protected override void OnMouseLeave(EventArgs e)
