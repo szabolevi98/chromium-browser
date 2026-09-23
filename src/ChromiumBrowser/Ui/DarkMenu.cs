@@ -25,12 +25,12 @@ namespace ChromiumBrowser.Ui;
 public static class DarkMenu
 {
     /// <summary>The one menu a window keeps. Made once, filled many times.</summary>
-    public static ContextMenuStrip Create(Font font) => new()
+    public static ContextMenuStrip Create(Font font) => new ContextMenuStrip
     {
         Renderer = new MenuRenderer(),
         ShowImageMargin = false,
         Font = font,
-    };
+    }.ClosesOnPageClicks();
 
     /// <summary>
     /// Empties the menu, disposing what was in it, and puts it back in the

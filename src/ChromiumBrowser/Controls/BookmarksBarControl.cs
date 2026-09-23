@@ -197,14 +197,14 @@ public sealed class BookmarksBarControl : Control
 
     private void ShowItemMenu(Bookmark bookmark, Point at)
     {
-        ContextMenuStrip menu = new()
+        ContextMenuStrip menu = new ContextMenuStrip
         {
             Renderer = new MenuRenderer(),
             BackColor = Theme.Current.Surface,
             ForeColor = Theme.Current.Text,
             ShowImageMargin = false,
             Font = Font,
-        };
+        }.ClosesOnPageClicks();
 
         void Item(string text, BookmarkAction action) =>
             menu.Items.Add(new ToolStripMenuItem(text, null, (_, _) =>

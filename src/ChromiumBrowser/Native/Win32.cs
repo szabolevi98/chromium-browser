@@ -149,6 +149,34 @@ internal static partial class Win32
         GetSystemMetricsForDpi(SM_CXSIZEFRAME, (uint)(96 * scale))
         + GetSystemMetricsForDpi(SM_CXPADDEDBORDER, (uint)(96 * scale));
 
+    internal const int WH_MOUSE_LL = 14;
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    internal static unsafe partial IntPtr SetWindowsHookExW(int hook, delegate* unmanaged<int, IntPtr, IntPtr, IntPtr> procedure, IntPtr module, uint thread);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool UnhookWindowsHookEx(IntPtr hook);
+
+    [LibraryImport("user32.dll")]
+    internal static partial IntPtr CallNextHookEx(IntPtr hook, int code, IntPtr wParam, IntPtr lParam);
+
+    [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16)]
+    internal static partial IntPtr GetModuleHandleW(string? name);
+
+    /// <summary>The POINT goes by value, which on x64 is one 64-bit word: x low, y high.</summary>
+    [LibraryImport("user32.dll", EntryPoint = "WindowFromPoint")]
+    private static partial IntPtr WindowFromPoint(long point);
+
+    internal static IntPtr WindowFromPoint(Point point) =>
+        WindowFromPoint(((long)point.Y << 32) | (uint)point.X);
+
+    [LibraryImport("user32.dll")]
+    internal static partial uint GetWindowThreadProcessId(IntPtr window, out uint process);
+
+    [LibraryImport("kernel32.dll")]
+    internal static partial uint GetCurrentThreadId();
+
     internal static Point ScreenPoint(IntPtr packed) =>
         new(unchecked((short)(long)packed), unchecked((short)((long)packed >> 16)));
 }

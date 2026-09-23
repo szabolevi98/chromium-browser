@@ -28,7 +28,7 @@
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationUseCompatibleTextRendering>false</ApplicationUseCompatibleTextRendering>
-    <Version>2.1.1</Version>
+    <Version>2.1.2</Version>
     <Product>Chromium Browser</Product>
     <Company>szabolevi98</Company>
     <Copyright>Copyright (c) 2026 szabolevi98</Copyright>
